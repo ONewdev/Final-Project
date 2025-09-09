@@ -72,10 +72,21 @@ function Payments() {
       });
       const data = await res.json();
       if (res.ok) {
+        // Update order status to shipped after successful payment
+        if (form.order_id) {
+          try {
+            await fetch(`${host}/api/orders/${form.order_id}/status`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'shipped' }),
+              credentials: 'include',
+            });
+          } catch {}
+        }
         setSuccessMsg('แจ้งชำระเงินสำเร็จ');
         setTimeout(() => {
-          navigate('/users/orders');
-        }, 1200);
+          navigate('/users/shipped');
+        }, 800);
         setForm({
           order_id: '',
           amount: '',

@@ -3,9 +3,9 @@ import Swal from 'sweetalert2';
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import Slidebar from "../../components/Slidebar";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import ProductDetailModal from "./ProductDetail";
+// Product detail now opens on a separate page
 import { FaHeart, FaRegHeart, FaStar } from "react-icons/fa";
 import {
   submitRating,
@@ -37,7 +37,7 @@ function Products() {
   const { user } = useAuth();
   const [comparison, setComparison] = useState([]);
   const [showCompare, setShowCompare] = useState(false);
-  const [selectedProductId, setSelectedProductId] = useState(null);
+  // Removed selectedProductId; using route navigation instead
   const [productRatings, setProductRatings] = useState({});
   const [favoritedProducts, setFavoritedProducts] = useState({});
   // โหลดสถานะ like/favorite ของแต่ละสินค้า
@@ -631,15 +631,15 @@ function Products() {
                           ? "นำออกจากเปรียบเทียบ"
                           : "เปรียบเทียบ"}
                       </button>
-                      <button
+                      <Link
                         className="text-green-500 hover:underline"
+                        to={`/products/${product.id}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedProductId(product.id);
                         }}
                       >
                         ดูรายละเอียด
-                      </button>
+                      </Link>
                     </div>
                   </div>
                 ))}
@@ -805,12 +805,7 @@ function Products() {
           </div>
         )}
       </div>
-      {selectedProductId && (
-        <ProductDetailModal
-          productId={selectedProductId}
-          onClose={() => setSelectedProductId(null)}
-        />
-      )}
+      {/* Modal removed; navigating to /products/:id instead */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
         {showScrollTop && (
           <button

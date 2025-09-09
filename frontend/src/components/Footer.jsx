@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, Mail, MapPin} from 'lucide-react';
+import { Phone, Mail, MapPin } from 'lucide-react';
 
 
 function Footer() {
@@ -38,16 +38,8 @@ function Footer() {
               <li><Link to="/contact" className="hover:text-white">ติดต่อเรา</Link></li>
             </ul>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-gray-100">หมวดสินค้า</h3>
-            <ul className="space-y-2 text-gray-400">
-              <li><a href="#" className="hover:text-white">ประตูอลูมิเนียม</a></li>
-              <li><a href="#" className="hover:text-white">หน้าต่างกระจก</a></li>
-              <li><a href="#" className="hover:text-white">มุ้งลวด</a></li>
-              <li><a href="#" className="hover:text-white">รั้วอลูมิเนียม</a></li>
-            </ul>
-          </div>
-          <div>
+
+          <div className="justify-self-end">
             <h3 className="text-lg font-semibold mb-4 text-gray-100">ติดต่อเรา</h3>
             <div className="space-y-3 text-gray-400">
               <div className="flex items-center">
@@ -65,9 +57,7 @@ function Footer() {
             </div>
           </div>
         </div>
-        <div className="border-t border-gray-600 mt-8 pt-8 text-center text-gray-400">
-          <p>&copy; 2025 AlumGlass. สงวนลิขสิทธิ์ทุกประการ</p>
-        </div>
+
       </div>
     </footer>
   );

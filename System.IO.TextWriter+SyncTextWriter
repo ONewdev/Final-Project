@@ -1,0 +1,250 @@
+import React, { useState, useEffect } from "react";
+import Swal from 'sweetalert2';
+import Navbar from "../../components/Navbar";
+import Footer from "../../components/Footer";
+import Slidebar from "../../components/Slidebar";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import ProductDetailModal from "./ProductDetail";
+import { FaHeart, FaRegHeart, FaStar } from "react-icons/fa";
+import {
+  submitRating,
+  addFavorite,
+  removeFavorite,
+} from "../../services/likeFavoriteService";
+
+function Products() {
+
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+    return () => {
+      if (document.head.contains(link)) {
+        document.head.removeChild(link);
+      }
+    };
+  }, []);
+  const host = import.meta.env.VITE_HOST;
+
+  const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [comparison, setComparison] = useState([]);
+  const [showCompare, setShowCompare] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState(null);
+  const [productRatings, setProductRatings] = useState({});
+  const [favoritedProducts, setFavoritedProducts] = useState({});
+  // โหลดสถานะ like/favorite ของแต่ละสินค้า
+
+
+  const fetchStatuses = async () => {
+    if (!user) return;
+
+    const ratings = {};
+    const favs = {};
+
+    for (const p of products) {
+      try {
+        // เรียก API เพื่อดึง rating status
+        const ratingRes = await fetch(
+          `${host}/api/interactions/rating/status?customer_id=${user.id}&product_id=${p.id}`
+        );
+
+        if (ratingRes.ok) {
+          const ratingData = await ratingRes.json();
+          ratings[p.id] = ratingData.rating || 0;
+        } else {
+          console.error(`Failed to fetch rating for product ${p.id}`);
+          ratings[p.id] = 0;
+        }
+
+        // เรียก API เพื่อดึง favorite status
+        const favRes = await fetch(
+          `${host}/api/interactions/favorite/status?customer_id=${user.id}&product_id=${p.id}`
+        );
+
+        if (favRes.ok) {
+          const favData = await favRes.json();
+          favs[p.id] = favData.favorited;
+        } else {
+          console.error(`Failed to fetch favorite for product ${p.id}`);
+          favs[p.id] = false;
+        }
+      } catch (e) {
+        console.error(`Error fetching statuses for product ${p.id}:`, e);
+        ratings[p.id] = 0;
+        favs[p.id] = false;
+      }
+    }
+
+    setProductRatings(ratings);
+    setFavoritedProducts(favs);
+  };
+
+  useEffect(() => {
+    if (products.length > 0) fetchStatuses();
+  }, [products, user, host]);
+
+  // Preload images for better performance
+  useEffect(() => {
+    if (products.length > 0) {
+      products.slice(0, 6).forEach(product => {
+        if (product.image_url && product.image_url.trim()) {
+          const img = new Image();
+          img.src = getImageUrl(product.image_url);
+        }
+      });
+    }
+  }, [products]);
+
+  const handleRatingChange = async (productId, newRating) => {
+    console.log(`Rating clicked: Product ${productId}, Rating ${newRating}`);
+    if (!user) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'กรุณาเข้าสู่ระบบ',
+        text: 'คุณต้องเข้าสู่ระบบก่อนให้คะแนนสินค้า',
+        confirmButtonText: 'เข้าสู่ระบบ',
+        showCancelButton: true,
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#16a34a',
+        cancelButtonColor: '#dc2626'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/login');
+        }
+      });
+      return;
+    }
+    try {
+      await submitRating(user.id, productId, newRating);
+
+      // อัปเดต state ทันทีเพื่อการตอบสนองที่รวดเร็ว
+      setProductRatings(prevRatings => ({
+        ...prevRatings,
+        [productId]: newRating,
+      }));
+
+      // แสดง feedback ให้ user ทราบ
+      Swal.fire({
+        icon: 'success',
+        title: 'ให้คะแนนสำเร็จ!',
+        text: `คุณได้ให้คะแนน ${newRating} ดาว`,
+        showConfirmButton: false,
+        timer: 1500,
+        confirmButtonColor: '#16a34a',
+      });
+    } catch (error) {
+      console.error("Error submitting rating:", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        text: 'ไม่สามารถให้คะแนนได้ในขณะนี้',
+        confirmButtonColor: '#16a34a',
+      });
+    }
+  };
+
+  const handleFavorite = async (productId) => {
+    if (!user) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'กรุณาเข้าสู่ระบบ',
+        text: 'คุณต้องเข้าสู่ระบบก่อนเพิ่มสินค้าในรายการโปรด',
+        confirmButtonText: 'เข้าสู่ระบบ',
+        showCancelButton: true,
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#16a34a',
+        cancelButtonColor: '#dc2626'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/login');
+        }
+      });
+      return;
+    }
+    try {
+      if (favoritedProducts[productId]) {
+        await removeFavorite(user.id, productId);
+        Swal.fire({
+          icon: 'success',
+          title: 'นำออกจากรายการโปรดแล้ว',
+          showConfirmButton: false,
+          timer: 1500,
+          confirmButtonColor: '#16a34a',
+        });
+      } else {
+        await addFavorite(user.id, productId);
+        Swal.fire({
+          icon: 'success',
+          title: 'เพิ่มในรายการโปรดแล้ว',
+          showConfirmButton: false,
+          timer: 1500,
+          confirmButtonColor: '#16a34a',
+        });
+      }
+      await fetchStatuses(); // รีเฟรชสถานะจาก backend จริง
+    } catch (error) {
+      console.error("Error updating favorite:", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        text: 'ไม่สามารถอัพเดทรายการโปรดได้ในขณะนี้',
+        confirmButtonColor: '#16a34a',
+      });
+    }
+  };
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const productsPerPage = 6;
+
+  useEffect(() => {
+    fetch(`${host}/api/categories`)
+      .then((res) => res.json())
+      .then((data) => {
+        // ตรวจสอบว่าเป็น array หรืออยู่ใน .data
+        if (Array.isArray(data)) {
+          setCategories(data);
+        } else if (Array.isArray(data.data)) {
+          setCategories(data.data);
+        } else {
+          setCategories([]);
+          console.warn("หมวดหมู่ไม่ใช่ array:", data);
+        }
+      })
+      .catch((err) => {
+        console.error("หมวดหมู่ error:", err);
+        setCategories([]);
+      });
+  }, []);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        let url = `${host}/api/products?status=active`;
+
+        if (selectedCategory) {
+          url += `&category_id=${selectedCategory}`;
+        }
+
+        const res = await fetch(url);
+        const data = await res.json();
+        let productList = [];
+
+        if (Array.isArray(data)) {
+          productList = data;
+        } else if (Array.isArray(data.data)) {
+          productList = data.data;
+        } else {
+          console.warn("สินค้าไม่ใช่ array:", data);

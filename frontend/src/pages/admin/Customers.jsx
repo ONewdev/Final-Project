@@ -1,14 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DataTable from 'react-data-table-component';
 import Swal from 'sweetalert2';
-import { FaCheck, FaBan, FaEdit, FaTrash, FaTimes } from 'react-icons/fa';
+import { FaCheck, FaBan, FaTrash } from 'react-icons/fa';
 
 function Customers() {
   const [customers, setCustomers] = useState([]);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editCustomer, setEditCustomer] = useState(null);
   const [search, setSearch] = useState('');
-  const host = import.meta.env.VITE_HOST;
+  const host = import.meta.env.VITE_HOST || '';
 
   useEffect(() => {
     fetch(`${host}/api/customers`)
@@ -17,7 +15,6 @@ function Customers() {
       .catch((err) => console.error('Fetch error:', err));
   }, [host]);
 
-  // กรองจากชื่อหรืออีเมล (ไม่สนตัวพิมพ์เล็กใหญ่)
   const filteredCustomers = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return customers;
@@ -83,46 +80,9 @@ function Customers() {
     });
   };
 
-  const handleEdit = (id) => {
-    const customer = customers.find((c) => c.id === id);
-    setEditCustomer({ ...customer });
-    setShowEditModal(true);
-  };
-
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditCustomer((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleEditSubmit = (e) => {
-    e.preventDefault();
-
-    const { email, name, status } = editCustomer;
-    const updateData = { email, name, status };
-
-    fetch(`${host}/api/customers/${editCustomer.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updateData),
-    })
-      .then((res) => res.json())
-      .then(() => {
-        Swal.fire('สำเร็จ', 'อัปเดตข้อมูลลูกค้าแล้ว', 'success');
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === editCustomer.id ? { ...c, ...updateData } : c))
-        );
-        setShowEditModal(false);
-      })
-      .catch(() => Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอัปเดตได้', 'error'));
-  };
-
-  const safeDate = (d) => (d ? new Date(d).toLocaleString() : '-');
-
   const columns = [
     { name: 'Email', selector: (row) => row.email ?? '-' },
     { name: 'Name', selector: (row) => row.name ?? '-' },
-    { name: 'Created At', selector: (row) => safeDate(row.created_at) },
-    { name: 'Updated At', selector: (row) => safeDate(row.updated_at) },
     {
       name: 'Status',
       cell: (row) => (
@@ -136,9 +96,6 @@ function Customers() {
           {row.status === 'active' ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
         </span>
       ),
-      ignoreRowClick: true,
-      allowOverflow: true,
-      button: true,
     },
     {
       name: 'Profile Picture',
@@ -152,9 +109,6 @@ function Customers() {
         ) : (
           'N/A'
         ),
-      ignoreRowClick: true,
-      allowOverflow: true,
-      button: true,
     },
     {
       name: 'Actions',
@@ -163,7 +117,7 @@ function Customers() {
           {row.status === 'active' ? (
             <button
               onClick={() => handleStatusChange(row.id, 'inactive')}
-              className="px-2 py-1 text-yellow-600 border border-yellow-300 rounded hover:bg-yellow-50 transition-colors"
+              className="px-2 py-1 text-yellow-600 border border-yellow-300 rounded hover:bg-yellow-50"
               title="ปิดใช้งาน"
             >
               <FaBan />
@@ -171,31 +125,21 @@ function Customers() {
           ) : (
             <button
               onClick={() => handleStatusChange(row.id, 'active')}
-              className="px-2 py-1 text-green-600 border border-green-300 rounded hover:bg-green-50 transition-colors"
+              className="px-2 py-1 text-green-600 border border-green-300 rounded hover:bg-green-50"
               title="เปิดใช้งาน"
             >
               <FaCheck />
             </button>
           )}
           <button
-            onClick={() => handleEdit(row.id)}
-            className="px-2 py-1 text-blue-600 border border-blue-300 rounded hover:bg-blue-50 transition-colors"
-            title="แก้ไข"
-          >
-            <FaEdit />
-          </button>
-          <button
             onClick={() => handleDelete(row.id)}
-            className="px-2 py-1 text-red-600 border border-red-300 rounded hover:bg-red-50 transition-colors"
+            className="px-2 py-1 text-red-600 border border-red-300 rounded hover:bg-red-50"
             title="ลบ"
           >
             <FaTrash />
           </button>
         </div>
       ),
-      ignoreRowClick: true,
-      allowOverflow: true,
-      button: true,
     },
   ];
 
@@ -238,94 +182,6 @@ function Customers() {
         )
       ) : (
         <p className="text-gray-500">ไม่มีข้อมูล</p>
-      )}
-
-      {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50"
-            onClick={() => setShowEditModal(false)}
-          ></div>
-
-          {/* Modal */}
-          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold">แก้ไขข้อมูลลูกค้า</h3>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <FaTimes />
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleEditSubmit}>
-              <div className="p-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    name="email"
-                    value={editCustomer?.email || ''}
-                    onChange={handleEditChange}
-                    type="email"
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Name
-                  </label>
-                  <input
-                    name="name"
-                    value={editCustomer?.name || ''}
-                    onChange={handleEditChange}
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Status
-                  </label>
-                  <select
-                    name="status"
-                    value={editCustomer?.status || 'active'}
-                    onChange={handleEditChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="active">เปิดใช้งาน</option>
-                    <option value="inactive">ปิดใช้งาน</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="flex justify-end gap-3 p-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  บันทึกการเปลี่ยนแปลง
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
     </div>
   );

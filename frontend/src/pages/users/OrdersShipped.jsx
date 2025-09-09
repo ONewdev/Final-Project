@@ -10,7 +10,6 @@ function OrdersShipped() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ฟังก์ชันยืนยันรับสินค้า
   const handleConfirmOrder = async (orderId) => {
     try {
       const response = await fetch(`${host}/api/orders/${orderId}/status`, {
@@ -20,17 +19,16 @@ function OrdersShipped() {
         credentials: 'include',
       });
       if (response.ok) {
-        // รีเฟรชข้อมูลออเดอร์ใหม่
-        const updatedOrders = await fetch(`${host}/api/orders/customer/${user.id}`, { credentials: 'include' });
-        if (updatedOrders.ok) {
-          const data = await updatedOrders.json();
-          setOrders(data.filter(o => o.status === 'shipped'));
+        const updated = await fetch(`${host}/api/orders/customer/${user.id}`, { credentials: 'include' });
+        if (updated.ok) {
+          const data = await updated.json();
+          setOrders(data.filter((o) => o.status === 'shipped'));
         }
       } else {
-        alert('เกิดข้อผิดพลาดในการยืนยันรับสินค้า');
+        alert('ไม่สามารถยืนยันการรับสินค้าได้');
       }
     } catch (error) {
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+      alert('เกิดข้อผิดพลาดในการยืนยันการรับสินค้า');
     }
   };
 
@@ -44,7 +42,7 @@ function OrdersShipped() {
         const response = await fetch(`${host}/api/orders/customer/${user.id}`, { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
-          setOrders(data.filter(o => o.status === 'shipped'));
+          setOrders(data.filter((o) => o.status === 'shipped'));
         } else {
           setOrders([]);
         }
@@ -63,22 +61,25 @@ function OrdersShipped() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
         <OrdersNavbar />
-        <h1 className="text-2xl font-bold mb-6">ออเดอร์ที่ต้องรับ</h1>
+        <h1 className="text-2xl font-bold mb-6">คำสั่งซื้อที่กำลังจัดส่ง</h1>
         {orders.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">ยังไม่มีออเดอร์ที่ต้องรับ</div>
+          <div className="p-6 text-center text-gray-500">ยังไม่มีคำสั่งซื้อที่กำลังจัดส่ง</div>
         ) : (
           <div className="divide-y">
-            {orders.map(order => (
+            {orders.map((order) => (
               <div key={order.id} className="p-4 border rounded-lg mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold">รหัสออเดอร์: #{String(order.id).padStart(4, '0')}</span>
+                  <span className="font-semibold">หมายเลขคำสั่งซื้อ: #{String(order.id).padStart(4, '0')}</span>
                   <span className="font-semibold text-lg">฿{Number(order.total_price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="mb-3 text-amber-700">
+                  สถานะ: กำลังจัดส่ง (ยังไม่ยืนยันรับสินค้า)
                 </div>
                 <button
                   className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
                   onClick={() => handleConfirmOrder(order.id)}
                 >
-                  ยืนยันรับสินค้า
+                  ยืนยันการรับสินค้า
                 </button>
               </div>
             ))}

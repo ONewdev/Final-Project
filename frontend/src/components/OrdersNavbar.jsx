@@ -3,9 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 const navItems = [
   { label: 'ทั้งหมด', path: '/users/orders' },
-  { label: 'ที่ต้องชำระ', path: '/users/pending' },
-  { label: 'ที่ต้องรับ', path: '/users/shipped' },
-  { label: 'สำเร็จแล้ว', path: '/users/delivered' },
+  { label: 'รอดำเนินการ', path: '/users/pending' },
+  { label: 'กำลังจัดส่ง', path: '/users/shipped' },
+  { label: 'จัดส่งสำเร็จ', path: '/users/delivered' },
   { label: 'ยกเลิก', path: '/users/cancelled' },
 ];
 
@@ -16,7 +16,7 @@ function OrdersNavbar() {
   return (
     <nav className="mb-8 mx-auto w-full max-w-4xl rounded-2xl border border-green-100/70 bg-white/80 backdrop-blur-md px-4 py-4 shadow-lg">
       <div className="flex flex-wrap items-center justify-center gap-3">
-        {navItems.map(item => {
+        {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <button
@@ -42,3 +42,4 @@ function OrdersNavbar() {
 }
 
 export default OrdersNavbar;
+

@@ -5,7 +5,6 @@ import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
 const host = import.meta.env.VITE_HOST || '';
 
-
 function toMeters(value, unit) {
   const n = parseFloat(String(value || ''));
   if (isNaN(n) || n <= 0) return 0;
@@ -50,8 +49,15 @@ function Custom() {
       .catch(err => { console.error('API /api/categories error:', err); setCategories([]); });
   }, []);
 
-  const productType =
-    categories.find(c => String(c.category_id) === String(form.category))?.category_name || '';
+  const selectedCategory = useMemo( // 🆕 หาหมวดหมู่ที่เลือกไว้
+    () => categories.find(c => String(c.category_id) === String(form.category)) || null,
+    [categories, form.category]
+  );
+  const productType = selectedCategory?.category_name || ''; // เดิม
+  const categoryImageUrl = useMemo(() => { // 🆕 URL รูปตัวอย่าง
+    const file = selectedCategory?.image_url;
+    return file ? `${host}/uploads/categories/${file}` : null;
+  }, [selectedCategory]);
 
   // parsed สำหรับ pricing.js
   const parsed = useMemo(() => {
@@ -190,7 +196,7 @@ function Custom() {
   const showFixedAreas = showHangingOptions && form.mode === 'แบ่ง4';
 
   return (
-    <div style={{ maxWidth: 560, margin: '32px auto', padding: 0 }}>
+    <div style={{ maxWidth: 800, margin: '32px auto', padding: 0 }}>
       <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
         <button
           type="button"
@@ -207,8 +213,8 @@ function Custom() {
           <span style={{ fontSize: 20, lineHeight: 1 }}>←</span>
           กลับหน้าก่อนหน้า
         </button>
-       
       </div>
+
       <div style={{
         background: '#fff',
         borderRadius: 16,
@@ -224,12 +230,70 @@ function Custom() {
           {/* ประเภทสินค้า */}
           <div>
             <label style={{ fontWeight: 500 }}>ประเภทสินค้า</label>
-            <select name="category" value={form.category} onChange={handleChange} required style={selectStyle}>
+            <select
+              name="category"
+              value={form.category}
+              onChange={handleChange}
+              required
+              style={selectStyle}
+            >
               <option value="">เลือกประเภท</option>
               {categories.map(c => (
                 <option key={c.category_id} value={c.category_id}>{c.category_name}</option>
               ))}
             </select>
+
+            {/* แสดงภาพตัวอย่าง */}
+            {selectedCategory && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  border: '1px dashed #ddd',
+                  borderRadius: 12,
+                  background: '#fafafa'
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                  {selectedCategory.category_name}
+                </div>
+                <div
+                  style={{
+                    width: '100%',
+                    maxHeight: 400,     // สูงขึ้นเล็กน้อย
+                    overflow: 'hidden',
+                    borderRadius: 12,
+                    background: '#f0f0f0',
+                    border: '1px solid #e5e5e5'
+                  }}
+                >
+                  {categoryImageUrl ? (
+                    <img
+                      src={categoryImageUrl}
+                      alt={selectedCategory.category_name}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain'  // ไม่ครอปภาพ
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: 200,
+                        color: '#aaa'
+                      }}
+                    >
+                      ไม่มีรูปภาพ
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ขนาด */}
@@ -258,7 +322,7 @@ function Custom() {
           <div>
             <label style={{ fontWeight: 500 }}>สี</label>
             <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
-              {['ขาว','ชา','เงิน','ดำ'].map(c => (
+              {['ขาว', 'ชา', 'เงิน', 'ดำ'].map(c => (
                 <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <input
                     type="radio"
@@ -267,7 +331,7 @@ function Custom() {
                     checked={form.color === c}
                     onChange={handleChange}
                   />
-                  {c}{c==='ดำ' && ' (+300)'}
+                  {c}{c === 'ดำ' && ' (+300)'}
                 </label>
               ))}
             </div>
@@ -278,14 +342,20 @@ function Custom() {
             <label style={{ fontWeight: 500 }}>จำนวน</label>
             <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 56px', gap: 8, alignItems: 'center', marginTop: 4 }}>
               <button type="button" onClick={() => handleQty(-1)} style={iconBtnStyle}>−</button>
-              <input type="number" name="quantity" value={form.quantity}
+              <input
+                type="number"
+                name="quantity"
+                value={form.quantity}
                 onChange={(e) => setForm(prev => ({ ...prev, quantity: clampQty(parseInt(e.target.value, 10)) }))}
-                min={1} required style={{ ...inputStyle, textAlign: 'center' }} />
+                min={1}
+                required
+                style={{ ...inputStyle, textAlign: 'center' }}
+              />
               <button type="button" onClick={() => handleQty(1)} style={iconBtnStyle}>+</button>
             </div>
           </div>
 
-          {/* เงื่อนไขอื่น ๆ (ตามประเภท) */}
+          {/* เงื่อนไขอื่น ๆ */}
           {showHasScreen && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input type="checkbox" name="hasScreen" checked={form.hasScreen} onChange={handleChange} />
@@ -315,7 +385,6 @@ function Custom() {
             <label style={{ fontWeight: 500 }}>รายละเอียดเพิ่มเติม</label>
             <textarea name="details" value={form.details} onChange={handleChange} style={{ ...inputStyle, minHeight: 60 }} placeholder="รายละเอียดอื่น ๆ" />
           </div>
-
 
           <div style={{ margin: '8px 0', textAlign: 'center' }}>
             {estimatedPrice > 0 ? (

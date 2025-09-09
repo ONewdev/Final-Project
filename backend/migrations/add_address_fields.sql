@@ -1,7 +1,0 @@
--- เพิ่มคอลัมน์สำหรับข้อมูลที่อยู่ในตาราง customers
-ALTER TABLE customers
-ADD COLUMN phone VARCHAR(20) DEFAULT NULL,
-ADD COLUMN address TEXT DEFAULT NULL,
-ADD COLUMN district VARCHAR(100) DEFAULT NULL,
-ADD COLUMN province VARCHAR(100) DEFAULT NULL,
-ADD COLUMN postal_code VARCHAR(5) DEFAULT NULL;

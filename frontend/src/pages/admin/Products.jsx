@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import DataTable from 'react-data-table-component';
 import Swal from 'sweetalert2';
-import { FaEdit, FaPlus, FaTimes, FaImage, FaSearch } from 'react-icons/fa';
+import { FaEdit, FaPlus, FaTimes, FaImage, FaSearch, FaEye } from 'react-icons/fa';
 import { useMemo } from 'react';
 
 // Wrap your Modal component with React.memo
@@ -42,7 +42,9 @@ function Products() {
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
+  const [detailProduct, setDetailProduct] = useState(null);
   const [categories, setCategories] = useState([]);
   const [newProduct, setNewProduct] = useState({
     product_code: '',
@@ -114,6 +116,14 @@ function Products() {
       console.log('Edit product:', product); // debug log
       setEditProduct({ ...product });
       setShowEditModal(true);
+    }
+  };
+
+  const handleViewDetails = (id) => {
+    const product = products.find((p) => p.id === id);
+    if (product) {
+      setDetailProduct(product);
+      setShowDetailModal(true);
     }
   };
 
@@ -351,6 +361,13 @@ function Products() {
       cell: (row) => (
         <div className="flex gap-2">
           <button
+            onClick={() => handleViewDetails(row.id)}
+            className="p-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+            title="รายละเอียด"
+          >
+            <FaEye size={14} />
+          </button>
+          <button
             onClick={() => handleEdit(row.id)}
             className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors duration-200"
             title="แก้ไข"
@@ -359,7 +376,7 @@ function Products() {
           </button>
         </div>
       ),
-      width: '80px'
+      width: '140px'
     },
   ];
 
@@ -631,6 +648,81 @@ function Products() {
               </button>
             </div>
           </form>
+        </Modal>
+
+        <Modal
+          show={showDetailModal}
+          onHide={() => {
+            setShowDetailModal(false);
+            setDetailProduct(null);
+          }}
+          title="รายละเอียดสินค้า"
+        >
+          {detailProduct && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-4">
+                {detailProduct.image_url ? (
+                  <img
+                    src={`${host}${detailProduct.image_url}`}
+                    alt={detailProduct.name}
+                    className="w-28 h-28 rounded-lg object-cover border border-gray-200"
+                  />
+                ) : (
+                  <div className="w-28 h-28 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-200">
+                    <FaImage size={24} />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs text-gray-500">รหัสสินค้า</p>
+                      <p className="font-medium text-gray-900">{detailProduct.product_code || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">ชื่อสินค้า</p>
+                      <p className="font-medium text-gray-900">{detailProduct.name || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">หมวดหมู่</p>
+                      <p className="font-medium text-gray-900">{detailProduct.category_name || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">ราคา</p>
+                      <p className="font-medium text-green-600">{formatPrice(detailProduct.price)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">จำนวน</p>
+                      <p className={`font-medium ${detailProduct.quantity <= 5 ? 'text-red-600' : 'text-gray-900'}`}>{detailProduct.quantity}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">สถานะ</p>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${detailProduct.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {detailProduct.status === 'active' ? 'แสดง' : 'ไม่แสดง'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500 mb-1">รายละเอียดสินค้า</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{detailProduct.description || '-'}</p>
+              </div>
+
+              <div className="flex justify-end border-t pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setDetailProduct(null);
+                  }}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors duration-200"
+                >
+                  ปิด
+                </button>
+              </div>
+            </div>
+          )}
         </Modal>
 
         <Modal

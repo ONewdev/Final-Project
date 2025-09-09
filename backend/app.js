@@ -13,7 +13,6 @@ const contactRouter = require('./routes/contact');
 const adminRouter = require('./routes/admin'); 
 const categoryRouter = require('./routes/categories'); 
 const ordersRouter = require('./routes/orders'); 
-const materialRouter = require('./routes/material');
 const interactionRoutes = require('./routes/interactions'); 
 const statsRoutes = require('./routes/stats');
 const paymentRoutes = require('./routes/payment');
@@ -22,7 +21,6 @@ const chatRoutes = require('./routes/chat');
 const inboxRoutes = require('./routes/inbox');
 const customOrderRoutes = require('./routes/customOrders');
 const notificationRouter = require('./routes/notification');
-const requisitionRoutes = require('./routes/requisition');
 const reportsRoutes = require('./routes/reports');
 
 
@@ -54,8 +52,7 @@ app.use('/api/contact', contactRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/categories', categoryRouter); 
-app.use('/api/orders', ordersRouter); 
-app.use('/api/materials', materialRouter); 
+app.use('/api/orders', ordersRouter);  
 app.use('/api/interactions', interactionRoutes); 
 app.use('/api/stats', statsRoutes);
 app.use('/api/payments', paymentsRoutes);
@@ -63,7 +60,6 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/messages', chatRoutes);
 app.use('/api/inbox', inboxRoutes);
 app.use('/api/custom', customOrderRoutes);
-app.use('/api/requisition', requisitionRoutes);
 app.use('/api/reports', reportsRoutes);
 
 // Serve static files (ภาพ) จาก public/uploads

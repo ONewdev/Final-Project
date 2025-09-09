@@ -164,17 +164,8 @@ export default function SidebarAdmin() {
         </li>
         {/* จัดการข้อมูลร้านค้า */}
         <li className="nav-item">
-          <DropdownToggle label="จัดการข้อมูลร้านค้า" icon="🏢" name="shop" />
-          {openDropdown.shop && (
-            <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
-              <li>
-                <Link to="/admin/finance" className={`nav-link text-white ps-4 ${isActive('/admin/finance') ? 'active' : ''}`}>💰 ฐานการเงินร้านค้า</Link>
-              </li>
-              <li>
-                <Link to="/admin/quotation" className={`nav-link text-white ps-4 ${isActive('/admin/quotation') ? 'active' : ''}`}>📄 ใบเสนอราคา</Link>
-              </li>
-              <li>
-                <DropdownToggle label="รายงาน" icon="📊" name="reports" />
+          
+              <DropdownToggle label="รายงาน" icon="📊" name="reports" />
                 {openDropdown.reports && (
                   <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
                     <li>
@@ -191,17 +182,9 @@ export default function SidebarAdmin() {
                     </li>
                   </ul>
                 )}
-              </li>
-            
-              <li>
-                <Link to="/admin/withdraw" className={`nav-link text-white ps-4 ${isActive('/admin/withdraw') ? 'active' : ''}`}>🏦 เบิกวัสดุ</Link>
-              </li>
-              <li>
-                <Link to="/admin/material" className={`nav-link text-white ps-4 ${isActive('/admin/material') ? 'active' : ''}`}>🧱 วัสดุที่ใช้</Link>
-              </li>
-            </ul>
-          )}
         </li>
+            
+             
 
         {/* อื่นๆ */}
         <li className="nav-item">

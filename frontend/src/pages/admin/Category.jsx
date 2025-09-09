@@ -8,37 +8,44 @@ function Category() {
   const [showModal, setShowModal] = useState(false);
   const [editCategory, setEditCategory] = useState(null);
   const [form, setForm] = useState({ category_name: '' });
+  const [imageFile, setImageFile] = useState(null);
+  const [preview, setPreview] = useState(null);
   const host = import.meta.env.VITE_HOST;
 
   useEffect(() => {
     fetch(`${host}/api/categories`)
-      .then(res => res.json())
-      .then(data => setCategories(data))
+      .then((res) => res.json())
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
       .catch(() => setCategories([]));
   }, [host]);
 
-  const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleAdd = () => {
     setEditCategory(null);
     setForm({ category_name: '' });
+    setImageFile(null);
+    setPreview(null);
     setShowModal(true);
   };
 
   const handleEdit = (id) => {
     const category = categories.find((c) => c.category_id === id);
+    if (!category) return;
     setEditCategory(category);
     setForm({ category_name: category.category_name });
+    setImageFile(null);
+    setPreview(category.image_url ? `${host}/uploads/categories/${category.image_url}` : null);
     setShowModal(true);
   };
 
   const handleDelete = (id) => {
     Swal.fire({
-      title: 'ลบหมวดหมู่?',
-      text: 'คุณต้องการลบหมวดหมู่นี้หรือไม่',
+      title: 'ยืนยันการลบหมวดหมู่?',
+      text: 'การลบนี้จะทำให้ข้อมูลหมวดหมู่ถูกลบออกถาวร',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'ใช่, ลบเลย',
+      confirmButtonText: 'ยืนยัน ลบหมวดหมู่',
       cancelButtonText: 'ยกเลิก',
       confirmButtonColor: '#16a34a',
     }).then((result) => {
@@ -47,7 +54,7 @@ function Category() {
           .then((res) => res.json())
           .then(() => {
             setCategories((prev) => prev.filter((a) => a.category_id !== id));
-            Swal.fire('ลบแล้ว!', '', 'success');
+            Swal.fire('ลบสำเร็จ!', '', 'success');
           });
       }
     });
@@ -56,36 +63,84 @@ function Category() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (editCategory) {
-      // update
       fetch(`${host}/api/categories/${editCategory.category_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
         .then((res) => res.json())
-        .then((data) => {
-          setCategories((prev) => prev.map((a) => (a.category_id === editCategory.category_id ? { ...a, ...form } : a)));
+        .then(async (updatedBase) => {
+          let updated = updatedBase;
+          if (imageFile) {
+            const fd = new FormData();
+            fd.append('image', imageFile);
+            const upRes = await fetch(`${host}/api/categories/${editCategory.category_id}/image`, {
+              method: 'POST',
+              body: fd,
+            });
+            if (upRes.ok) updated = await upRes.json();
+          }
+          setCategories((prev) =>
+            prev.map((a) => (a.category_id === editCategory.category_id ? { ...a, ...form, image_url: updated.image_url } : a))
+          );
           setShowModal(false);
-          Swal.fire('สำเร็จ', 'อัปเดตข้อมูลหมวดหมู่แล้ว', 'success');
+          Swal.fire('สำเร็จ', 'แก้ไขหมวดหมู่เรียบร้อยแล้ว', 'success');
         });
     } else {
-      // create
       fetch(`${host}/api/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
         .then((res) => res.json())
-        .then((data) => {
-          setCategories((prev) => [...prev, data]);
+        .then(async (created) => {
+          let result = created;
+          if (imageFile && created?.category_id) {
+            const fd = new FormData();
+            fd.append('image', imageFile);
+            const upRes = await fetch(`${host}/api/categories/${created.category_id}/image`, {
+              method: 'POST',
+              body: fd,
+            });
+            if (upRes.ok) result = await upRes.json();
+          }
+          setCategories((prev) => [...prev, result]);
           setShowModal(false);
-          Swal.fire('สำเร็จ', 'เพิ่มหมวดหมู่แล้ว', 'success');
+          Swal.fire('สำเร็จ', 'เพิ่มหมวดหมู่เรียบร้อยแล้ว', 'success');
         });
     }
   };
 
-  // DataTable columns
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setImageFile(file);
+    setPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const handleClearImage = async (id) => {
+    const res = await fetch(`${host}/api/categories/${id}/image`, { method: 'DELETE' });
+    if (res.ok) {
+      const updated = await res.json();
+      setCategories((prev) => prev.map((a) => (a.category_id === id ? { ...a, image_url: updated.image_url } : a)));
+      Swal.fire('สำเร็จ', 'ลบรูปภาพเรียบร้อยแล้ว', 'success');
+    }
+  };
+
   const columns = [
+    {
+      name: 'รูปภาพ',
+      cell: (row) =>
+        row.image_url ? (
+          <img
+            src={`${host}/uploads/categories/${row.image_url}`}
+            alt="category"
+            className="h-12 w-12 object-cover rounded"
+          />
+        ) : (
+          <span className="text-gray-400">-</span>
+        ),
+      width: '100px',
+    },
     { name: 'ชื่อหมวดหมู่', selector: (row) => row.category_name },
     {
       name: 'Actions',
@@ -105,6 +160,15 @@ function Category() {
           >
             <FaTrash />
           </button>
+          {row.image_url && (
+            <button
+              onClick={() => handleClearImage(row.category_id)}
+              className="px-2 py-1 text-gray-700 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              title="Remove image"
+            >
+              ลบรูปภาพ
+            </button>
+          )}
         </div>
       ),
     },
@@ -121,38 +185,25 @@ function Category() {
       {categories.length > 0 ? (
         <DataTable columns={columns} data={categories} pagination />
       ) : (
-  <p className="text-gray-500 font-kanit">ไม่มีข้อมูล</p>
+        <p className="text-gray-500 font-kanit">ไม่พบข้อมูล</p>
       )}
 
-      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50"
-            onClick={() => setShowModal(false)}
-          ></div>
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowModal(false)}></div>
 
-          {/* Modal */}
           <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 font-kanit">
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="text-lg font-semibold font-kanit">{editCategory ? 'แก้ไขหมวดหมู่' : 'เพิ่มหมวดหมู่'}</h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors font-kanit"
-              >
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors font-kanit">
                 <FaTimes />
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleSubmit}>
               <div className="p-4 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 font-kanit">
-                    ชื่อหมวดหมู่
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-kanit">ชื่อหมวดหมู่</label>
                   <input
                     name="category_name"
                     value={form.category_name}
@@ -161,10 +212,21 @@ function Category() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent font-kanit"
                   />
                 </div>
-                {/* เพิ่มฟิลด์อื่นๆ ได้ตามต้องการ */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-kanit">รูปภาพ (ถ้ามี)</label>
+                  <input type="file" accept="image/*" onChange={handleImageChange} className="block w-full text-sm" />
+                  {(preview || editCategory?.image_url) && (
+                    <div className="mt-2">
+                      <img
+                        src={preview || `${host}/uploads/categories/${editCategory?.image_url || ''}`}
+                        alt="preview"
+                        className="h-24 w-24 object-cover rounded border"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Footer */}
               <div className="flex justify-end gap-3 p-4 border-t">
                 <button
                   type="button"
@@ -173,10 +235,7 @@ function Category() {
                 >
                   ยกเลิก
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors font-kanit"
-                >
+                <button type="submit" className="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors font-kanit">
                   บันทึก
                 </button>
               </div>
@@ -188,4 +247,5 @@ function Category() {
   );
 }
 
-export default Category
+export default Category;
+

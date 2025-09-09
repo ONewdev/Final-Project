@@ -1,9 +1,9 @@
-const db = require('../db'); // Knex instance
+const db = require('../db'); 
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// === เตรียม path อัปโหลด ===
+
 const uploadDir = path.join(__dirname, '..', 'public', 'uploads', 'products');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -22,12 +22,10 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 const uploadProductImage = upload.single('image'); // ใช้กับ field name="image"
 
-// === Controller ===
 
-// 1. Get all products
 const getAllProducts = async (req, res) => {
   try {
-    const { category_id, status } = req.query; // ✅ ดึง status จาก query string
+    const { category_id, status } = req.query; 
 
     let query = db('products')
       .leftJoin('category', 'products.category_id', 'category.category_id')
@@ -91,7 +89,6 @@ const addProduct = async (req, res) => {
         throw new Error("Failed to insert product, no ID returned.");
     }
 
-    // Now, use the ID directly to fetch the full product details
     const newlyAddedProduct = await db('products')
         .leftJoin('category', 'products.category_id', 'category.category_id')
         .select(
@@ -126,18 +123,21 @@ const addProduct = async (req, res) => {
 
 
 
-// 3. Update product
+
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-  const { name, description, category_id, price, quantity, status } = req.body;
+  const { product_code, name, description, category_id, price, quantity, status } = req.body;
   console.log(req.file); // ตรวจสอบว่ามีไฟล์อัปโหลดหรือไม่
 
   try {
     // เตรียมข้อมูลที่จะอัปเดต
     const updateData = {
+      // allow updating product code as well
+      product_code,
       name,
       description,
-      category_id,
+      // normalize empty string to null for optional foreign key
+      category_id: category_id === '' ? null : category_id,
       price,
       quantity,
       status,
@@ -178,9 +178,6 @@ const updateProduct = async (req, res) => {
 };
 
 
-// 4. Delete product
-// (removed)
-// 5. Update only status
 const updateProductStatus = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
@@ -196,7 +193,8 @@ const updateProductStatus = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
-// 6. Get product by ID
+
+
 const getProductById = async (req, res) => {
   const { id } = req.params;
 

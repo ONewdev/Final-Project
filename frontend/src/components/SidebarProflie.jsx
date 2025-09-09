@@ -9,6 +9,7 @@ const menuItems = [
   { to: '/users/profile', icon: '👤', label: 'โปรไฟล์' },
   { to: '/users/favorite', icon: '❤️', label: 'รายการโปรด' },
   { to: '/users/orders', icon: '🛒', label: 'คำสั่งซื้อของฉัน' },
+  { to: '/users/orders', icon: '🛒', label: 'สั่งทำสินค้า' },
   
 ];
 

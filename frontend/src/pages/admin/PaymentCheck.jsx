@@ -8,6 +8,21 @@ export default function PaymentCheck() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Preview payment slip image in a SweetAlert modal
+  const handlePreview = (imageName) => {
+    if (!imageName) return;
+    const url = `${host}/uploads/payments/${imageName}`;
+    Swal.fire({
+      imageUrl: url,
+      imageAlt: 'สลิป',
+      showConfirmButton: false,
+      showCloseButton: true,
+      background: '#000',
+      width: 'auto',
+      padding: 0,
+    });
+  };
+
   useEffect(() => {
     fetch(`${host}/api/payments?status=pending`)
       .then(async (res) => {
@@ -108,9 +123,9 @@ const handleApprove = async (paymentId) => {
                 <td className="border px-4 py-2">
                   {payment.image ? (
                     <div>
-                      <a href={`${host}/uploads/payments/${payment.image}`} target="_blank" rel="noopener noreferrer">
-                        <img src={`${host}/uploads/payments/${payment.image}`} alt="สลิป" className="h-12 rounded" />
-                      </a>
+                      <button type="button" onClick={() => handlePreview(payment.image)} className="focus:outline-none" title="คลิกเพื่อดูภาพ">
+                        <img src={`${host}/uploads/payments/${payment.image}`} alt="สลิป" className="h-12 rounded cursor-zoom-in" />
+                      </button>
                       <div className="text-xs text-gray-400 break-all">{payment.image}</div>
                     </div>
                   ) : (
