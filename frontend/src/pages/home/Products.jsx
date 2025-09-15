@@ -806,7 +806,7 @@ function Products() {
         )}
       </div>
       {/* Modal removed; navigating to /products/:id instead */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
+      <div className="fixed bottom-25 right-6 z-10 flex flex-col items-end gap-4">
         {showScrollTop && (
           <button
             onClick={scrollToTop}

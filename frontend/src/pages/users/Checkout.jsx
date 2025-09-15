@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 function Checkout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const host = import.meta.env.VITE_HOST;
   
@@ -21,6 +22,12 @@ function Checkout() {
   useEffect(() => {
     if (!user) {
       navigate('/login');
+      return;
+    }
+
+    const selected = (location.state && location.state.items) ? location.state.items : null;
+    if (selected && selected.length > 0) {
+      setCart(selected);
       return;
     }
 
@@ -75,8 +82,10 @@ function Checkout() {
     const updatedCart = cart.filter(item => item.id !== productId);
     setCart(updatedCart);
     
-    const cartKey = `cart_${user.id}`;
-    localStorage.setItem(cartKey, JSON.stringify(updatedCart));
+    if (!(location.state && location.state.items)) {
+      const cartKey = `cart_${user.id}`;
+      localStorage.setItem(cartKey, JSON.stringify(updatedCart));
+    }
   };
 
   const handleUpdateQuantity = (productId, type) => {
@@ -91,8 +100,10 @@ function Checkout() {
     });
     
     setCart(updatedCart);
-    const cartKey = `cart_${user.id}`;
-    localStorage.setItem(cartKey, JSON.stringify(updatedCart));
+    if (!(location.state && location.state.items)) {
+      const cartKey = `cart_${user.id}`;
+      localStorage.setItem(cartKey, JSON.stringify(updatedCart));
+    }
   };
 
   const calculateTotal = () => {
@@ -336,3 +347,5 @@ function Checkout() {
 }
 
 export default Checkout; 
+
+

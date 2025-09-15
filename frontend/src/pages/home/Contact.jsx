@@ -107,7 +107,7 @@ function Contact() {
             <form className="bg-white rounded-lg shadow-lg p-8" onSubmit={handleSubmit}>
               <h2 className="text-2xl font-bold text-green-800 mb-6">ส่งข้อความถึงเรา</h2>
               <div className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid md:grid-cols-2 gap-6 mt-4">
                   <div>
                     <label className="block text-green-700 font-medium mb-2">ชื่อ-นามสกุล *</label>
                     <input
@@ -116,7 +116,7 @@ function Contact() {
                       value={formData.name}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent "
                       placeholder="กรุณากรอกชื่อ-นามสกุล"
                     />
                   </div>
@@ -128,7 +128,7 @@ function Contact() {
                       value={formData.email}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent "
                       placeholder="example@email.com"
                     />
                   </div>
@@ -189,7 +189,7 @@ function Contact() {
               <div className="bg-white rounded-lg shadow-lg p-8">
                 <h2 className="text-2xl font-bold text-green-800 mb-6">ข้อมูลติดต่อ</h2>
                 <div className="space-y-6">
-                  <div className="flex items-start space-x-4">
+                  <div className="flex items-start space-x-4 mt-5">
                     <MapPin className="text-green-600 mt-1" size={24} />
                     <div>
                       <h3 className="font-semibold text-green-800">ที่อยู่</h3>

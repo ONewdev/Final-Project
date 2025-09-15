@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { CheckCircle, AlertTriangle, XCircle, Info } from "lucide-react";
 
 function Notifications() {
@@ -45,7 +45,7 @@ function Notifications() {
     </div>
   ) : notifications.length === 0 ? (
     <div className="text-center text-gray-400 py-10 italic">
-      ยังไม่มีการแจ้งเตือน
+      ไม่มีการแจ้งเตือน
     </div>
   ) : (
     <ul className="space-y-4">
@@ -57,7 +57,7 @@ function Notifications() {
           <div className="mt-1">{getIcon(n.type)}</div>
           <div className="flex-1">
             <div className="font-semibold text-gray-800">
-              {n.title || "แจ้งเตือน"}
+              {n.title || "การแจ้งเตือน"}
             </div>
             <div className="text-gray-600 text-sm">{n.message}</div>
             {n.created_at && (

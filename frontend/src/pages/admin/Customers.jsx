@@ -57,40 +57,19 @@ function Customers() {
     });
   };
 
-  const handleDelete = (id) => {
-    Swal.fire({
-      title: 'คุณแน่ใจหรือไม่?',
-      text: 'คุณต้องการลบลูกค้ารายนี้หรือไม่',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'ใช่, ลบเลย',
-      cancelButtonText: 'ยกเลิก',
-    }).then((result) => {
-      if (result.isConfirmed) {
-        fetch(`${host}/api/customers/${id}`, { method: 'DELETE' })
-          .then((res) => res.json())
-          .then(() => {
-            setCustomers((prev) => prev.filter((c) => c.id !== id));
-            Swal.fire('ลบแล้ว!', 'ลูกค้าถูกลบเรียบร้อยแล้ว', 'success');
-          })
-          .catch(() => {
-            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถลบลูกค้าได้', 'error');
-          });
-      }
-    });
-  };
+ 
 
   const columns = [
-    { name: 'Email', selector: (row) => row.email ?? '-' },
-    { name: 'Name', selector: (row) => row.name ?? '-' },
+    { name: 'อีเมล', selector: (row) => row.email ?? '-' },
+    { name: 'ชื่อ', selector: (row) => row.name ?? '-' },
     {
-      name: 'Status',
+      name: 'สถานะการใช้งาน',
       cell: (row) => (
         <span
           className={`px-2 py-1 rounded-full text-xs font-medium ${
             row.status === 'active'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-800'
+              ? ' text-green-800'
+              : ' text-red-800'
           }`}
         >
           {row.status === 'active' ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
@@ -98,7 +77,7 @@ function Customers() {
       ),
     },
     {
-      name: 'Profile Picture',
+      name: 'รูปโปรไฟล์',
       cell: (row) =>
         row.profile_picture ? (
           <img
@@ -111,7 +90,7 @@ function Customers() {
         ),
     },
     {
-      name: 'Actions',
+      name: 'จัดการ',
       cell: (row) => (
         <div className="flex gap-2">
           {row.status === 'active' ? (
@@ -131,13 +110,7 @@ function Customers() {
               <FaCheck />
             </button>
           )}
-          <button
-            onClick={() => handleDelete(row.id)}
-            className="px-2 py-1 text-red-600 border border-red-300 rounded hover:bg-red-50"
-            title="ลบ"
-          >
-            <FaTrash />
-          </button>
+          
         </div>
       ),
     },

@@ -14,6 +14,7 @@ import Payments from '../pages/users/Payments';
 import Cart from '../pages/users/Cart';
 import Notifications from '../pages/users/Notifications';
 import MainLayout from '../components/MainLayoutProflie';
+import OrdersCustom from '../pages/users/OrdersCustom';
 
 
 export default function UsersRoutes() {
@@ -28,6 +29,7 @@ export default function UsersRoutes() {
         <Route path="shipped" element={<OrdersShipped />} />
         <Route path="delivered" element={<OrdersDelivered />} />
         <Route path="cancelled" element={<OrdersCancelled />} />
+        <Route path="orderscustom" element={<OrdersCustom />} />
         <Route path="checkout" element={<Checkout />} />
         <Route path="payments" element={<Payments />} />
         <Route path="cart" element={<Cart />} />

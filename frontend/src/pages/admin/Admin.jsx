@@ -104,8 +104,8 @@ function Admin() {
         <table className="min-w-full bg-white rounded shadow">
           <thead>
             <tr className="bg-green-100 text-green-800">
-              <th className="py-2 px-4">Userna</th>
-              <th className="py-2 px-4">Actions</th>
+              <th className="py-2 px-4">ชื่อ</th>
+              <th className="py-2 px-4">จัดการ</th>
             </tr>
           </thead>
           <tbody>

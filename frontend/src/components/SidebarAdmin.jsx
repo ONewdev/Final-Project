@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { FaBars, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import Swal from 'sweetalert2';
@@ -12,6 +13,7 @@ export default function SidebarAdmin() {
     products: false,
     orders: false,
   });
+  const [chatUnread, setChatUnread] = useState(0);
 
   useEffect(() => {
     if (!document.getElementById('kanit-font')) {
@@ -23,6 +25,31 @@ export default function SidebarAdmin() {
       document.head.appendChild(link);
     }
   }, []);
+
+  // Socket notifications for chat
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+    socket.on('chat message', (msg) => {
+      if (msg && msg.userId !== 1 && location.pathname !== '/admin/chat') {
+        setChatUnread((prev) => prev + 1);
+      }
+    });
+    const onAdminUnreadChanged = (e) => {
+      const total = Number(e.detail || 0);
+      setChatUnread(total);
+    };
+    window.addEventListener('adminUnreadChanged', onAdminUnreadChanged);
+    return () => {
+      try { socket.disconnect(); } catch {}
+      window.removeEventListener('adminUnreadChanged', onAdminUnreadChanged);
+    };
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname === '/admin/chat') {
+      setChatUnread(0);
+    }
+  }, [location.pathname]);
 
   const handleLogout = () => {
     Swal.fire({
@@ -109,6 +136,9 @@ export default function SidebarAdmin() {
               <li>
                 <Link to="/admin/chat" className={`nav-link text-white ps-4 ${isActive('/admin/chat') ? 'active' : ''}`}>
                   💬 ข้อความลูกค้า
+                  {chatUnread > 0 && (
+                  <span className="badge bg-danger ms-2">{chatUnread}</span>
+                )}
                 </Link>
               </li>
               <li>
@@ -171,9 +201,6 @@ export default function SidebarAdmin() {
                     <li>
                       <Link to="/admin/report/sales" className={`nav-link text-white ps-4 ${isActive('/admin/report/sales') ? 'active' : ''}`}>📊 รายงานยอดขาย</Link>
                     </li>
-                    <li>
-                      <Link to="/admin/report/material" className={`nav-link text-white ps-4 ${isActive('/admin/report/material') ? 'active' : ''}`}>🧱 รายงานวัสดุ</Link>
-                    </li>
                    <li>
                       <Link to="/admin/report/order" className={`nav-link text-white ps-4 ${isActive('/admin/report/order') ? 'active' : ''}`}>📑 รายงานคำสั่งซื้อ</Link>
                   </li>
@@ -183,9 +210,6 @@ export default function SidebarAdmin() {
                   </ul>
                 )}
         </li>
-            
-             
-
         {/* อื่นๆ */}
         <li className="nav-item">
           <Link to="/admin/contact" className={`nav-link text-white ${isActive('/admin/contact') ? 'active' : ''}`}>

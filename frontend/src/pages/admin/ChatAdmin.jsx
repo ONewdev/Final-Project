@@ -13,6 +13,8 @@ function ChatAdmin() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const notifPermRef = useRef(false);
 
   // ดึงรายชื่อผู้ติดต่อ
   useEffect(() => {
@@ -33,6 +35,38 @@ function ChatAdmin() {
       socketRef.current?.disconnect();
     };
   }, [selectedContact]);
+
+  // Secondary listener for unread counts + desktop notifications
+  useEffect(() => {
+    const socketAlt = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+    socketAlt.on('chat message', (msg) => {
+      if (!selectedContact || msg.userId !== selectedContact.id) {
+        setUnreadCounts((prev) => {
+          const next = { ...prev, [msg.userId]: (prev[msg.userId] || 0) + 1 };
+          const total = Object.values(next).reduce((a, b) => a + b, 0);
+          try { window.dispatchEvent(new CustomEvent('adminUnreadChanged', { detail: total })); } catch {}
+          return next;
+        });
+        if (notifPermRef.current && typeof window !== 'undefined' && 'Notification' in window) {
+          try { new Notification(`ข้อความใหม่จาก ${msg.username || 'ลูกค้า'}`, { body: msg.text || 'มีข้อความใหม่' }); } catch {}
+        }
+      }
+    });
+    return () => { try { socketAlt.disconnect(); } catch {} };
+  }, [selectedContact]);
+
+  // Ask for browser notification permission once
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        notifPermRef.current = true;
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then((perm) => {
+          notifPermRef.current = perm === 'granted';
+        });
+      }
+    }
+  }, []);
 
   // ดึงข้อความเมื่อเลือกผู้ติดต่อ (ครั้งแรก)
   useEffect(() => {
@@ -83,7 +117,18 @@ function ChatAdmin() {
                   ${selectedContact?.id === c.id 
                     ? 'bg-green-100 shadow-md border border-green-200' 
                     : 'hover:bg-gray-100'}`}
-                onClick={() => setSelectedContact(c)}
+                onClick={() => {
+                  setSelectedContact(c);
+                  try {
+                    // clear unread for this contact
+                    setUnreadCounts((prev) => {
+                      const next = { ...prev, [c.id]: 0 };
+                      const total = Object.values(next).reduce((a, b) => a + b, 0);
+                      try { window.dispatchEvent(new CustomEvent('adminUnreadChanged', { detail: total })); } catch {}
+                      return next;
+                    });
+                  } catch {}
+                }}
               >
                 <div className="flex items-center gap-3">
                   {c.profile_picture ? (
@@ -107,6 +152,11 @@ function ChatAdmin() {
 
                   </div>
                 </div>
+                {unreadCounts[c.id] > 0 && (
+                  <span className="ms-2 inline-flex items-center justify-center bg-danger text-white text-xs fw-semibold rounded-pill px-2 py-0.5">
+                    {unreadCounts[c.id]}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

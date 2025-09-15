@@ -12,7 +12,6 @@ import Contact from "../pages/admin/Contact";
 import Report from "../pages/admin/Report";
 import ReportOrder from "../pages/admin/ReportOrder";
 import ReportSales from "../pages/admin/ReportSales";
-import ReportMaterial from "../pages/admin/ReportMaterial"; 
 import ReportProfit from "../pages/admin/ReportProfit";
 import Inbox from "../pages/admin/Inbox";
 import Custom_Orders from "../pages/admin/Custom_Orders"; 
@@ -42,7 +41,6 @@ export default function AdminRoutes() {
           <Route path="report" element={<Report />} />
           <Route path="report/order" element={<ReportOrder />} />
           <Route path="report/sales" element={<ReportSales />} />
-          <Route path="report/material" element={<ReportMaterial />} />
           <Route path="report/profit" element={<ReportProfit />} />
         </Route>
       </Route>

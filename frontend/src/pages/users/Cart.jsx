@@ -7,6 +7,7 @@ function Cart() {
   const navigate = useNavigate();
   const host = import.meta.env.VITE_HOST;
   const [cart, setCart] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   const formatCurrency = (num) => (
     num !== undefined && num !== null && !isNaN(Number(num))
@@ -22,6 +23,7 @@ function Cart() {
     const cartKey = getCartKey();
     const savedCart = JSON.parse(localStorage.getItem(cartKey)) || [];
     setCart(savedCart);
+    setSelectedIds(new Set(savedCart.map(i => i.product_id || i.id)));
     window.dispatchEvent(new Event('cartUpdated'));
   }, [user]);
 
@@ -67,19 +69,45 @@ function Cart() {
 
   // คำนวณยอดรวมของตะกร้า
   const calculateCartTotal = () => {
-    return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    return cart
+      .filter(item => selectedIds.has(item.product_id || item.id))
+      .reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
-  // ไปหน้า Checkout
+  const countSelectedItems = () => {
+    return cart
+      .filter(item => selectedIds.has(item.product_id || item.id))
+      .reduce((sum, i) => sum + i.quantity, 0);
+  };
+
+  const toggleSelectOne = (pid) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (n.has(pid)) n.delete(pid); else n.add(pid);
+      return n;
+    });
+  };
+
+  const allSelected = cart.length > 0 && selectedIds.size === cart.length;
+  const toggleSelectAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(cart.map(i => i.product_id || i.id)));
+  };
+
+  // Checkout only selected items
   const handleCheckout = () => {
-    if (cart.length === 0) {
-      alert('ไม่มีสินค้าในตะกร้า');
+    const selectedItems = cart.filter(i => selectedIds.has(i.product_id || i.id));
+    if (selectedItems.length === 0) {
+      alert("????????????????????????? 1 ??????");
       return;
     }
-    navigate('/users/checkout');
+    const itemsForCheckout = selectedItems.map(i => ({
+      ...i,
+      id: i.product_id || i.id,
+      name: i.name || i.product_name || i.title || "?????? #" + (i.product_id || i.id),
+    }));
+    navigate("/users/checkout", { state: { items: itemsForCheckout } });
   };
-
-  // ล้างตะกร้า
   const handleClearCart = () => {
     const cartKey = getCartKey();
     localStorage.removeItem(cartKey);
@@ -112,13 +140,19 @@ function Cart() {
             <div className="lg:col-span-2 bg-white rounded-xl shadow-sm ring-1 ring-gray-100">
               <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">รายการสินค้า</h2>
-                <span className="text-sm text-gray-500">{cart.reduce((sum, i) => sum + i.quantity, 0)} ชิ้น</span>
+                <span className="text-sm text-gray-500">{countSelectedItems()} ชิ้น</span>
               </div>
 
               {/* Mobile list */}
               <div className="p-4 space-y-3 md:hidden">
                 {cart.map((item, idx) => (
                   <div key={item.product_id || item.id || idx} className="flex items-center gap-3 rounded-lg border border-gray-100 p-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={selectedIds.has(item.product_id || item.id)}
+                      onChange={() => toggleSelectOne(item.product_id || item.id)}
+                    />
                     {item.image_url && (
                       <img src={`${host}${item.image_url}`} alt={item.product_name || item.name} className="w-16 h-16 object-cover rounded-md ring-1 ring-gray-200" />
                     )}
@@ -188,6 +222,12 @@ function Cart() {
                       <tr key={item.product_id || item.id || idx}>
                         <td className="px-4 py-3 align-middle">
                           <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={selectedIds.has(item.product_id || item.id)}
+                              onChange={() => toggleSelectOne(item.product_id || item.id)}
+                            />
                             {item.image_url && (
                               <img src={`${host}${item.image_url}`} alt={item.product_name || item.name} className="w-12 h-12 object-cover rounded ring-1 ring-gray-200" />
                             )}
@@ -257,7 +297,7 @@ function Cart() {
                 <div className="mt-4 space-y-3 text-sm">
                   <div className="flex justify-between text-gray-600">
                     <span>จำนวนสินค้า</span>
-                    <span>{cart.reduce((sum, i) => sum + i.quantity, 0)} ชิ้น</span>
+                    <span>{countSelectedItems()} ชิ้น</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>ยอดสินค้า</span>
@@ -292,3 +332,6 @@ function Cart() {
 }
 
 export default Cart;
+
+
+

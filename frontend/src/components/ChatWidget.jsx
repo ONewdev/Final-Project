@@ -14,6 +14,7 @@ const ChatWidget = () => {
   const [adminUnread, setAdminUnread] = useState(0);
   const socketRef = useRef(null);
   const chatEndRef = useRef(null);
+  const notifPermRef = useRef(false);
 
   useEffect(() => {
     // ตรวจสอบ user login (เช็ค localStorage)
@@ -60,6 +61,11 @@ const ChatWidget = () => {
           // ถ้าเป็นข้อความจาก admin และยังไม่เปิดแชท
           if (msg.userId === 1 && !open) {
             setAdminUnread((prev) => prev + 1);
+            if (notifPermRef.current && typeof window !== 'undefined' && 'Notification' in window) {
+              try {
+                new Notification('ข้อความใหม่จากแอดมิน', { body: msg.text || 'มีข้อความใหม่' });
+              } catch (e) {}
+            }
           }
         }
       });
@@ -71,6 +77,19 @@ const ChatWidget = () => {
       }
     };
   }, [open, user]);
+
+  // Ask for browser notification permission
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        notifPermRef.current = true;
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then((perm) => {
+          notifPermRef.current = perm === 'granted';
+        });
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (open && chatEndRef.current) {
@@ -129,7 +148,7 @@ const ChatWidget = () => {
               placeholder="พิมพ์ข้อความ..."
               autoFocus
             />
-            <button type="submit" className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold">ส่ง</button>
+            <button type="submit" className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg font-bold">ส่ง</button>
           </form>
         </div>
       )}
@@ -144,7 +163,10 @@ const ChatWidget = () => {
           >
             💬
           </button>
-         
+          {adminUnread > 0 && !open && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-white" aria-hidden="true"></span>
+          )}
+
         </div>
       )}
     </div>

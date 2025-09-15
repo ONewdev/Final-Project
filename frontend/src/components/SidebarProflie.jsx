@@ -5,6 +5,14 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { FaBars } from 'react-icons/fa';
 import Swal from 'sweetalert2';
 
+// เมนูแถบด้านข้าง (โปรไฟล์ผู้ใช้)
+const MENU_ITEMS = [
+  { to: '/users/profile', icon: '👤', label: 'โปรไฟล์' },
+  { to: '/users/favorite', icon: '⭐', label: 'รายการที่ถูกใจ' },
+  { to: '/users/orders', icon: '🛒', label: 'คำสั่งซื้อ' },
+  { to: '/users/orderscustom', icon: '🛠️', label: 'รายการสั่งทำ' },
+];
+
 const menuItems = [
   { to: '/users/profile', icon: '👤', label: 'โปรไฟล์' },
   { to: '/users/favorite', icon: '❤️', label: 'รายการโปรด' },
@@ -136,7 +144,7 @@ export default function SidebarProflie() {
       
       {isLoggedIn ? (
         // แสดงเมนูสำหรับผู้ใช้ที่ล็อกอินแล้ว
-        menuItems.map((item, idx) => (
+        MENU_ITEMS.map((item, idx) => (
         <li className="nav-item" key={idx}>
           <Link
           to={item.to}
