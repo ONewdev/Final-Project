@@ -112,7 +112,6 @@ function Checkout() {
 
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
-    
     if (!formData.shipping_address || !formData.phone) {
       Swal.fire({
         icon: 'warning',
@@ -123,8 +122,19 @@ function Checkout() {
       return;
     }
 
-    setLoading(true);
+    const confirm = await Swal.fire({
+      title: 'ยืนยันการสั่งซื้อ',
+      text: 'คุณต้องการสั่งซื้อสินค้าทั้งหมดนี้ใช่หรือไม่?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'ยืนยัน',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#22c55e',
+      cancelButtonColor: '#d33',
+    });
+    if (!confirm.isConfirmed) return;
 
+    setLoading(true);
     try {
       const orderData = {
         customer_id: user.id,
@@ -151,7 +161,6 @@ function Checkout() {
         // ลบตะกร้าหลังจากสั่งซื้อสำเร็จ
         const cartKey = `cart_${user.id}`;
         localStorage.removeItem(cartKey);
-        
         await Swal.fire({
           icon: 'success',
           title: 'สั่งซื้อสำเร็จ!',

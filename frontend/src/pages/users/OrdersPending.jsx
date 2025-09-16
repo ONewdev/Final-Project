@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Swal from 'sweetalert2';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import OrdersNavbar from '../../components/OrdersNavbar';
@@ -47,7 +48,17 @@ function OrdersPending() {
   };
 
   const handleCancelOrder = async (orderId) => {
-    if (!window.confirm('คุณต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?')) return;
+    const result = await Swal.fire({
+      title: 'คุณต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?',
+      text: 'หากยกเลิกแล้วจะไม่สามารถย้อนกลับได้',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ยืนยัน',
+      cancelButtonText: 'ไม่ยกเลิก',
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+    });
+    if (!result.isConfirmed) return;
     try {
       const response = await fetch(`${host}/api/orders/${orderId}/cancel`, {
         method: 'PUT',
@@ -62,11 +73,27 @@ function OrdersPending() {
           const data = await updated.json();
           setOrders(data.filter((o) => o.status === 'pending'));
         }
+        await Swal.fire({
+          icon: 'success',
+          title: 'ยกเลิกออเดอร์สำเร็จ',
+          text: 'ออเดอร์ของคุณถูกยกเลิกแล้ว',
+          confirmButtonColor: '#22c55e',
+        });
       } else {
-        alert('เกิดข้อผิดพลาดในการยกเลิกออเดอร์');
+        Swal.fire({
+          icon: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          text: 'เกิดข้อผิดพลาดในการยกเลิกออเดอร์',
+          confirmButtonColor: '#d33',
+        });
       }
     } catch (error) {
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+      Swal.fire({
+        icon: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        text: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์',
+        confirmButtonColor: '#d33',
+      });
       console.error('Error cancelling order:', error);
     }
   };
@@ -174,18 +201,29 @@ function OrdersPending() {
 
                         {/* ปุ่มเฉพาะหน้า Pending */}
                         <div className="flex gap-2 flex-wrap">
-                          <button
-                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-                            onClick={() => navigate(`/users/payments?order_id=${order.id}`)}
-                          >
-                            ชำระเงิน
-                          </button>
-                          <button
-                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
-                            onClick={() => handleCancelOrder(order.id)}
-                          >
-                            ยกเลิกออเดอร์
-                          </button>
+                          {/* ปุ่มชำระเงิน เฉพาะสถานะ pending เท่านั้น */}
+                          {order.status === 'pending' && (
+                            <>
+                              <button
+                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                onClick={() => navigate(`/users/payments?order_id=${order.id}`)}
+                              >
+                                ชำระเงิน
+                              </button>
+                              <button
+                                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
+                                onClick={() => handleCancelOrder(order.id)}
+                              >
+                                ยกเลิกออเดอร์
+                              </button>
+                            </>
+                          )}
+                          {/* สถานะ approved: รอแอดมินตรวจสอบ ไม่แสดงปุ่มใด ๆ */}
+                          {order.status === 'approved' && (
+                            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                              รอแอดมินตรวจสอบการชำระเงินและอนุมัติจัดส่ง
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}

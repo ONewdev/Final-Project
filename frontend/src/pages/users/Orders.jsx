@@ -311,7 +311,28 @@ function Orders() {
                               ยกเลิกออเดอร์
                             </button>
                           )}
-                          {/* ปุ่มดูใบเสร็จถูกนำออก */}
+                          {/* ปุ่มดูรายละเอียดและใบเสร็จ เฉพาะสถานะ delivered และ cancelled */}
+                          {(order.status === 'delivered' || order.status === 'cancelled') && (
+                            <>
+                              <button
+                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                onClick={() => navigate(`/users/order/${order.id}`)}
+                              >
+                                ดูรายละเอียด
+                              </button>
+                              {order.status === 'delivered' && (
+                                <a
+                                  href={`${host}/api/orders/${order.id}/receipt`}
+                                  className="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-xs"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={`receipt_order_${order.id}.pdf`}
+                                >
+                                  ดูใบเสร็จ
+                                </a>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}

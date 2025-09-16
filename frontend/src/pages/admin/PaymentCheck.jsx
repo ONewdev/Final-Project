@@ -68,20 +68,6 @@ const handleApprove = async (paymentId) => {
         });
 
         if (res.ok) {
-          // สร้างการแจ้งเตือน
-          const payment = payments.find(p => p.id === paymentId);
-          if (payment) {
-            await fetch(`${host}/api/notifications`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                customer_id: payment.customer_id,
-                type: 'success',
-                title: 'ชำระเงินสำเร็จ',
-                message: `การชำระเงินของคุณได้รับการอนุมัติแล้ว จำนวน ฿${Number(payment.amount).toLocaleString('th-TH')}`,
-              })
-            });
-          }
 
           Swal.fire('สำเร็จ', 'อนุมัติการชำระเงินเรียบร้อยแล้ว', 'success');
           setPayments((prev) => prev.filter((p) => p.id !== paymentId));

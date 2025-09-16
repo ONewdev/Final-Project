@@ -149,7 +149,7 @@ function Favorite() {
                 src={item.image_url ? `${host}${item.image_url}` : '/images/no-image.png'}
                 alt={item.name}
                 className="w-full h-40 object-cover rounded-lg mb-4 cursor-pointer"
-                onClick={() => { setModalProduct(item); setModalOpen(true); }}
+                onClick={() => navigate(`/products/${item.id}`)}
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = "/images/watermark.png";
@@ -173,48 +173,7 @@ function Favorite() {
               </div>
             </div>
           ))}
-      {/* Modal แสดงรายละเอียดสินค้าและปุ่มสั่งซื้อ */}
-      {modalOpen && modalProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6 relative">
-            <button
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
-              onClick={() => setModalOpen(false)}
-            >
-              <FaTrash size={18} />
-            </button>
-            <img
-              src={modalProduct.image_url ? `${host}${modalProduct.image_url}` : '/images/no-image.png'}
-              alt={modalProduct.name}
-              className="w-full h-48 object-cover rounded mb-4"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = "/images/watermark.png";
-              }}
-            />
-            <h3 className="font-bold text-xl mb-2">{modalProduct.name}</h3>
-            <div className="text-sm text-gray-500 mb-2">{modalProduct.category_name || '-'}</div>
-            <div className="text-green-600 font-bold text-lg mb-2">
-              {formatPrice(modalProduct.price)}
-              {modalProduct.original_price && modalProduct.original_price > modalProduct.price && (
-                <span className="ml-2 text-red-500 text-sm line-through">
-                  {formatPrice(modalProduct.original_price)}
-                </span>
-              )}
-            </div>
-            <p className="text-gray-600 text-sm mb-3">{modalProduct.description}</p>
-            <div className="text-xs text-gray-400 border-t pt-2 mb-4">
-              เพิ่มเมื่อ: {formatDate(modalProduct.favorited_at)}
-            </div>
-            <button
-              className="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded font-bold text-lg"
-              onClick={() => handleOrder(modalProduct)}
-            >
-              สั่งซื้อสินค้า
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Modal แสดงรายละเอียดสินค้าและปุ่มสั่งซื้อ ถูกแทนที่ด้วยการ navigate ไปหน้า ProductDetail */}
         </div>
       )}
     </div>

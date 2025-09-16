@@ -51,15 +51,15 @@ router.put('/:id/status', async (req, res) => {
     // ดึงข้อมูล payment เพื่อหา order_id, customer_id
     const payment = await db('payments').where({ id }).first();
     if (payment && status === 'approved') {
-      // อัปเดตสถานะ order เป็น approved
-      await db('orders').where({ id: payment.order_id }).update({ status: 'approved' });
+      // อัปเดตสถานะ order เป็น approved (รอแอดมินอนุมัติจัดส่ง)
+      await db('orders').where({ id: payment.order_id }).update({ status: 'approved', approved_at: db.fn.now() });
 
       // เพิ่ม notification ให้ลูกค้า
       await db('notifications').insert({
         customer_id: payment.customer_id,
         type: 'success',
         title: 'ชำระเงินสำเร็จ',
-        message: `คำสั่งซื้อ #${String(payment.order_id).padStart(4, '0')} ได้รับการยืนยันแล้ว ขอบคุณที่ใช้บริการค่ะ`,
+        message: `คำสั่งซื้อ #${String(payment.order_id).padStart(4, '0')} ได้รับการยืนยันแล้ว รอแอดมินตรวจสอบและจัดส่ง`,
         created_at: new Date()
       });
     }

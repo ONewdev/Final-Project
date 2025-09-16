@@ -16,12 +16,10 @@ function Orders() {
   }, []);
 
   const statusMapping = {
-    pending: 'รออนุมัติ',
-    approved: 'อนุมัติแล้ว',
-    shipped: 'จัดส่งแล้ว',
-    received: 'รับสินค้าแล้ว',
-    processing: 'กำลังดำเนินการ',
-    completed: 'สำเร็จ',
+    pending: 'รอชำระเงิน/รออนุมัติ',
+    approved: 'ชำระเงินแล้ว/อนุมัติแล้ว',
+    shipped: 'กำลังจัดส่ง',
+    delivered: 'จัดส่งสำเร็จ',
     cancelled: 'ยกเลิก',
   };
 
@@ -66,7 +64,7 @@ function Orders() {
         row.items && row.items.length > 0 ? (
           <ul className="list-disc pl-4">
             {row.items.map((item, idx) => (
-              <li key={item.id ? `item-${item.id}` : `idx-${idx}`}>
+              <li key={item.id ? `item-${item.id}` : `idx-${idx}`}> 
                 {item.product_name}{' '}<span className="text-xs text-gray-500">x{item.quantity}</span>
               </li>
             ))}
@@ -89,35 +87,30 @@ function Orders() {
     },
     {
       name: 'สถานะ',
-      cell: (row) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-medium ${
-            row.status === 'pending'
-              ? 'bg-yellow-100 text-yellow-800'
-              : row.status === 'approved'
-              ? 'bg-blue-100 text-blue-800'
-              : row.status === 'shipped'
-              ? 'bg-purple-100 text-purple-800'
-              : row.status === 'received'
-              ? 'bg-green-100 text-green-800'
-              : row.status === 'cancelled'
-              ? 'bg-red-100 text-red-800'
-              : 'bg-gray-100 text-gray-600'
-          }`}
-        >
-          {statusMapping[row.status] || row.status}
-        </span>
-      ),
+      cell: (row) => {
+        let colorClass = 'bg-gray-100 text-gray-600';
+        if (row.status === 'pending') colorClass = 'bg-yellow-100 text-yellow-800';
+        else if (row.status === 'approved') colorClass = 'bg-blue-100 text-blue-800';
+        else if (row.status === 'shipped') colorClass = 'bg-purple-100 text-purple-800';
+        else if (row.status === 'delivered') colorClass = 'bg-green-100 text-green-800';
+        else if (row.status === 'cancelled') colorClass = 'bg-red-100 text-red-800';
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+            {statusMapping[row.status] || row.status}
+          </span>
+        );
+      },
     },
     {
       name: 'การดำเนินการ',
       cell: (row) => (
         <div className="flex gap-2">
+          {/* ปุ่มเปลี่ยนสถานะ */}
           {row.status === 'pending' ? (
             <button
               onClick={() => handleStatusChange(row.id, 'approved')}
               className="px-2 py-1 text-blue-600 border border-blue-300 rounded hover:bg-blue-50 transition-colors"
-              title="อนุมัติ"
+              title="อนุมัติ/ชำระเงินแล้ว"
             >
               <FaCheck />
             </button>
@@ -131,13 +124,21 @@ function Orders() {
             </button>
           ) : row.status === 'shipped' ? (
             <button
-              onClick={() => handleStatusChange(row.id, 'received')}
+              onClick={() => handleStatusChange(row.id, 'delivered')}
               className="px-2 py-1 text-green-600 border border-green-300 rounded hover:bg-green-50 transition-colors"
-              title="รับสินค้าแล้ว"
+              title="จัดส่งสำเร็จ"
             >
               <FaCheck />
             </button>
           ) : null}
+          {/* ปุ่มดูรายละเอียด */}
+          <button
+            className="px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-xs font-semibold"
+            onClick={() => window.open(`/admin/order/${row.id}`, '_blank')}
+            title="ดูรายละเอียดคำสั่งซื้อ"
+          >
+            ดูรายละเอียด
+          </button>
         </div>
       ),
     },

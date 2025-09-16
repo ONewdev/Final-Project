@@ -37,12 +37,17 @@ function Products() {
   const { user } = useAuth();
   const [comparison, setComparison] = useState([]);
   const [showCompare, setShowCompare] = useState(false);
-  // Removed selectedProductId; using route navigation instead
   const [productRatings, setProductRatings] = useState({});
   const [favoritedProducts, setFavoritedProducts] = useState({});
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const productsPerPage = 6;
+
   // โหลดสถานะ like/favorite ของแต่ละสินค้า
-
-
   const fetchStatuses = async () => {
     if (!user) return;
 
@@ -60,7 +65,6 @@ function Products() {
           const ratingData = await ratingRes.json();
           ratings[p.id] = ratingData.rating || 0;
         } else {
-          console.error(`Failed to fetch rating for product ${p.id}`);
           ratings[p.id] = 0;
         }
 
@@ -71,13 +75,11 @@ function Products() {
 
         if (favRes.ok) {
           const favData = await favRes.json();
-          favs[p.id] = favData.favorited;
+          favs[p.id] = !!favData.favorited;
         } else {
-          console.error(`Failed to fetch favorite for product ${p.id}`);
           favs[p.id] = false;
         }
-      } catch (e) {
-        console.error(`Error fetching statuses for product ${p.id}:`, e);
+      } catch {
         ratings[p.id] = 0;
         favs[p.id] = false;
       }
@@ -89,6 +91,7 @@ function Products() {
 
   useEffect(() => {
     if (products.length > 0) fetchStatuses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, user, host]);
 
   // Preload images for better performance
@@ -101,10 +104,10 @@ function Products() {
         }
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
 
   const handleRatingChange = async (productId, newRating) => {
-    console.log(`Rating clicked: Product ${productId}, Rating ${newRating}`);
     if (!user) {
       Swal.fire({
         icon: 'warning',
@@ -116,22 +119,13 @@ function Products() {
         confirmButtonColor: '#16a34a',
         cancelButtonColor: '#dc2626'
       }).then((result) => {
-        if (result.isConfirmed) {
-          navigate('/login');
-        }
+        if (result.isConfirmed) navigate('/login');
       });
       return;
     }
     try {
       await submitRating(user.id, productId, newRating);
-
-      // อัปเดต state ทันทีเพื่อการตอบสนองที่รวดเร็ว
-      setProductRatings(prevRatings => ({
-        ...prevRatings,
-        [productId]: newRating,
-      }));
-
-      // แสดง feedback ให้ user ทราบ
+      setProductRatings(prev => ({ ...prev, [productId]: newRating }));
       Swal.fire({
         icon: 'success',
         title: 'ให้คะแนนสำเร็จ!',
@@ -141,7 +135,6 @@ function Products() {
         confirmButtonColor: '#16a34a',
       });
     } catch (error) {
-      console.error("Error submitting rating:", error);
       Swal.fire({
         icon: 'error',
         title: 'เกิดข้อผิดพลาด',
@@ -163,9 +156,7 @@ function Products() {
         confirmButtonColor: '#16a34a',
         cancelButtonColor: '#dc2626'
       }).then((result) => {
-        if (result.isConfirmed) {
-          navigate('/login');
-        }
+        if (result.isConfirmed) navigate('/login');
       });
       return;
     }
@@ -191,7 +182,6 @@ function Products() {
       }
       await fetchStatuses(); // รีเฟรชสถานะจาก backend จริง
     } catch (error) {
-      console.error("Error updating favorite:", error);
       Swal.fire({
         icon: 'error',
         title: 'เกิดข้อผิดพลาด',
@@ -200,20 +190,12 @@ function Products() {
       });
     }
   };
-  const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [showScrollTop, setShowScrollTop] = useState(false);
 
-
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const productsPerPage = 6;
-
+  // โหลดหมวดหมู่
   useEffect(() => {
     fetch(`${host}/api/categories`)
       .then((res) => res.json())
       .then((data) => {
-        // ตรวจสอบว่าเป็น array หรืออยู่ใน .data
         if (Array.isArray(data)) {
           setCategories(data);
         } else if (Array.isArray(data.data)) {
@@ -227,16 +209,14 @@ function Products() {
         console.error("หมวดหมู่ error:", err);
         setCategories([]);
       });
-  }, []);
+  }, [host]); // ✅ ใส่ host ใน deps
 
+  // โหลดสินค้า
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         let url = `${host}/api/products?status=active`;
-
-        if (selectedCategory) {
-          url += `&category_id=${selectedCategory}`;
-        }
+        if (selectedCategory) url += `&category_id=${selectedCategory}`;
 
         const res = await fetch(url);
         const data = await res.json();
@@ -251,7 +231,6 @@ function Products() {
           productList = [];
         }
 
-        // 🔥 เอา filter searchTerm ออกจากที่นี่ เพราะจะทำใน useEffect อื่น
         setProducts(productList);
         setLoading(false);
       } catch (err) {
@@ -264,28 +243,21 @@ function Products() {
     fetchProducts();
   }, [host, selectedCategory]);
 
+  // กรอง + รีเซ็ตหน้า
   useEffect(() => {
     if (searchTerm.trim() === "") {
       setFilteredProducts(products);
     } else {
-      const filtered = products.filter(
-        (product) =>
-          product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.description
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          product.category_name
-            ?.toString()
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          product.category
-            ?.toString()
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase())
+      const s = searchTerm.toLowerCase();
+      const filtered = products.filter((product) =>
+        product.name?.toLowerCase().includes(s) ||
+        product.description?.toLowerCase().includes(s) ||
+        product.category_name?.toString().toLowerCase().includes(s) ||
+        product.category?.toString().toLowerCase().includes(s)
       );
       setFilteredProducts(filtered);
     }
-    setCurrentPage(1); // Reset to first page on search
+    setCurrentPage(1);
   }, [products, searchTerm]);
 
   const formatPrice = (price) => {
@@ -302,7 +274,12 @@ function Products() {
       } else if (prev.length < 4) {
         return [...prev, product];
       } else {
-        alert("เปรียบเทียบได้สูงสุด 4 รายการ");
+        Swal.fire({
+          icon: 'info',
+          title: 'แจ้งเตือน',
+          text: 'เปรียบเทียบได้สูงสุด 4 รายการ',
+          confirmButtonColor: '#16a34a',
+        });
         return prev;
       }
     });
@@ -321,29 +298,23 @@ function Products() {
 
   const handlePageChange = (page) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 300) {
-        setShowScrollTop(true);
-      } else {
-        setShowScrollTop(false);
-      }
+      if (window.scrollY > 300) setShowScrollTop(true);
+      else setShowScrollTop(false);
     };
-
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const handleAddToCart = (product) => {
+
+  const handleAddToCart = async (product) => {
     if (!user) {
       Swal.fire({
         icon: 'warning',
@@ -355,32 +326,53 @@ function Products() {
         confirmButtonColor: '#16a34a',
         cancelButtonColor: '#dc2626'
       }).then((result) => {
-        if (result.isConfirmed) {
-          navigate('/login');
-        }
+        if (result.isConfirmed) navigate('/login');
       });
       return;
     }
-    let cartKey = `cart_${user.id}`;
+    const cartKey = `cart_${user.id}`;
     const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
-    const found = cart.find(item => item.id === product.id);
-    if (found) {
-      found.quantity += 1;
-    } else {
-      cart.push({ ...product, quantity: 1, price: Number(product.price) });
-    }
-    localStorage.setItem(cartKey, JSON.stringify(cart));
-    window.dispatchEvent(new Event('cartUpdated'));
-    Swal.fire({
-      icon: 'success',
-      title: 'เพิ่มสินค้าลงตะกร้าแล้ว!',
-      showConfirmButton: false,
-      timer: 1500,
-      confirmButtonColor: '#16a34a',
-    });
+        // ตรวจสอบจำนวนคงเหลือจาก backend ก่อนเพิ่ม
+        try {
+          const res = await fetch(`${host}/api/products/${product.id}`);
+          if (!res.ok) throw new Error('ไม่พบสินค้า');
+          const prod = await res.json();
+          const found = cart.find(item => item.id === product.id);
+          const qtyInCart = found ? found.quantity : 0;
+          if (prod.quantity <= qtyInCart) {
+            Swal.fire({
+              icon: 'warning',
+              title: 'จำนวนสินค้าไม่พอ',
+              text: `สินค้าคงเหลือ ${prod.quantity} ชิ้น ไม่สามารถเพิ่มได้อีก`,
+              confirmButtonColor: '#dc2626',
+            });
+            return;
+          }
+          if (found) {
+            found.quantity += 1;
+          } else {
+            cart.push({ ...product, quantity: 1, price: Number(product.price) });
+          }
+          localStorage.setItem(cartKey, JSON.stringify(cart));
+          window.dispatchEvent(new Event('cartUpdated'));
+          Swal.fire({
+            icon: 'success',
+            title: 'เพิ่มสินค้าลงตะกร้าแล้ว!',
+            showConfirmButton: false,
+            timer: 1500,
+            confirmButtonColor: '#16a34a',
+          });
+        } catch (err) {
+          Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: 'ไม่สามารถตรวจสอบจำนวนสินค้าได้',
+            confirmButtonColor: '#dc2626',
+          });
+        }
   };
 
-  const handleBuyNow = (product) => {
+  const handleBuyNow = async (product) => {
     if (!user) {
       Swal.fire({
         icon: 'warning',
@@ -392,25 +384,45 @@ function Products() {
         confirmButtonColor: '#16a34a',
         cancelButtonColor: '#dc2626'
       }).then((result) => {
-        if (result.isConfirmed) {
-          navigate('/login');
-        }
+        if (result.isConfirmed) navigate('/login');
       });
       return;
     }
-    let cartKey = `cart_${user.id}`;
+    const cartKey = `cart_${user.id}`;
     const cart = [{ ...product, quantity: 1, price: Number(product.price) }];
-    localStorage.setItem(cartKey, JSON.stringify(cart));
-    window.dispatchEvent(new Event('cartUpdated'));
-    navigate('/users/checkout');
+        // ตรวจสอบจำนวนคงเหลือจาก backend ก่อนซื้อ
+        try {
+          const res = await fetch(`${host}/api/products/${product.id}`);
+          if (!res.ok) throw new Error('ไม่พบสินค้า');
+          const prod = await res.json();
+          if (prod.quantity < 1) {
+            Swal.fire({
+              icon: 'warning',
+              title: 'สินค้าหมด',
+              text: 'สินค้านี้หมดในคลัง ไม่สามารถสั่งซื้อได้',
+              confirmButtonColor: '#dc2626',
+            });
+            return;
+          }
+          localStorage.setItem(cartKey, JSON.stringify(cart));
+          window.dispatchEvent(new Event('cartUpdated'));
+          navigate('/users/checkout');
+        } catch (err) {
+          Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: 'ไม่สามารถตรวจสอบจำนวนสินค้าได้',
+            confirmButtonColor: '#dc2626',
+          });
+        }
   };
-
-
 
   // ฟังก์ชันสำหรับสร้าง URL รูปภาพ
   const getImageUrl = (imageUrl) => {
-    if (!imageUrl || !imageUrl.trim()) {
-      return "/images/no-image.png";
+    if (!imageUrl || !imageUrl.trim()) return "/images/no-image.png";
+    // ป้องกัน // ซ้ำ
+    if (host.endsWith("/") && imageUrl.startsWith("/")) {
+      return `${host.slice(0, -1)}${imageUrl}`;
     }
     return `${host}${imageUrl}`;
   };
@@ -428,17 +440,14 @@ function Products() {
         .image-fade-in {
           animation: fadeIn 0.3s ease-in;
         }
-        /* Star rating icon styles */
-        .star-rating button {
-          transition: all 0.2s ease;
-        }
-        .star-rating button:hover {
-          transform: scale(1.1);
-        }
-
+        .star-rating button { transition: all 0.2s ease; }
+        .star-rating button:hover { transform: scale(1.1); }
       `}</style>
+
       <Navbar />
-      <div className="w-full bg-gray/80 py-6 shadow text-left pl-10">
+
+      {/* แถบหัวข้อ (แก้ bg-gray/80 → bg-gray-100 ให้ถูกสเปค) */}
+      <div className="w-full bg-gray-100 py-6 shadow text-left pl-10">
         <h1
           className="text-3xl md:text-4xl font-bold text-green-700 tracking-wide"
           style={{ fontFamily: "'Kanit', 'Prompt', sans-serif" }}
@@ -446,9 +455,10 @@ function Products() {
           สินค้า
         </h1>
       </div>
-      <Slidebar />
-      <div className="max-w-7xl mx-auto px-4 py-8">
 
+      <Slidebar />
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
           <div className="mb-6 w-full">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 lg:gap-6">
@@ -460,6 +470,7 @@ function Products() {
                   onChange={(e) => {
                     setSelectedCategory(e.target.value);
                     setSearchTerm("");
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                 >
                   <option value="">ทุกหมวดหมู่</option>
@@ -470,7 +481,7 @@ function Products() {
                   ))}
                 </select>
 
-                {/* Search input sits right next to category */}
+                {/* Search */}
                 <div className="relative flex-1">
                   <input
                     type="text"
@@ -485,7 +496,7 @@ function Products() {
                 </div>
               </div>
 
-              {/* Right side: Custom order button pinned right */}
+              {/* Right side: Custom order button */}
               <div className="w-full lg:w-auto lg:ml-auto">
                 <button
                   className="w-full lg:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded-full border-2 border-green-700 transition"
@@ -497,6 +508,7 @@ function Products() {
             </div>
           </div>
         </div>
+
         {/* Compare Bar */}
         {comparison.length >= 2 && (
           <div className="mb-6 flex items-center gap-4 bg-yellow-50 border border-yellow-300 rounded-lg p-4">
@@ -517,6 +529,7 @@ function Products() {
             </button>
           </div>
         )}
+
         {/* Products Grid */}
         {loading ? (
           <div className="text-center py-16 text-xl text-gray-600">
@@ -529,122 +542,123 @@ function Products() {
                 {paginatedProducts.map((product) => (
                   <div
                     key={product.id}
-                    className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition duration-300 transform hover:-translate-y-1"
+                    className="group relative overflow-hidden rounded-2xl border border-green-100 bg-white shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
                   >
-                    <div className="relative">
+                    {/* รูป + ป้าย + หัวใจ */}
+                    <div className="relative aspect-[4/3] overflow-hidden">
                       <img
                         src={getImageUrl(product.image_url)}
                         alt={product.name}
-                        className="w-full h-64 object-cover"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
                         onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = "/images/no-image.png";
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = "/images/no-image.png";
                         }}
                       />
-                      {product.originalPrice > product.price && (
-                        <div className="absolute top-4 left-4 bg-red-500 text-white px-2 py-1 rounded-lg text-sm font-semibold">
-                          ลด{" "}
-                          {Math.round(
-                            ((product.originalPrice - product.price) /
-                              product.originalPrice) *
-                            100
-                          )}
-                          %
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 to-transparent" />
+
+                      {Number(product.originalPrice) > Number(product.price) && (
+                        <div className="absolute left-3 top-3 rounded-full bg-red-500/95 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+                          ลด {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
                         </div>
                       )}
+
+                      <button
+                        onClick={() => handleFavorite(product.id)}
+                        aria-pressed={!!favoritedProducts[product.id]}
+                        className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-pink-500 shadow-md transition hover:bg-white"
+                        title="รายการโปรด"
+                      >
+                        {favoritedProducts[product.id] ? <FaHeart className="text-xl" /> : <FaRegHeart className="text-xl" />}
+                      </button>
                     </div>
-                    <div className="p-6">
-                      <div className="mb-2">
-                        <span className="text-sm text-green-600 font-medium">
+
+                    {/* เนื้อหา */}
+                    <div className="space-y-3 p-5">
+                      <div className="text-xs flex items-center gap-2">
+                        <span className="inline-block rounded-full border border-green-200 bg-green-50 px-2.5 py-1 font-medium text-green-700">
                           {product.category_name || product.category || "-"}
                         </span>
+                        {/* จำนวนสินค้าคงเหลือ */}
+                        <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${product.quantity <= 5 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+                          คงเหลือ {product.quantity} ชิ้น
+                        </span>
                       </div>
-                      <h3 className="text-xl font-bold text-gray-800 mb-3">
+
+                      <h3 className="line-clamp-2 text-lg font-extrabold tracking-tight text-gray-800">
                         {product.name}
                       </h3>
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-2xl font-bold text-green-600">
-                            {formatPrice(product.price)}
-                          </span>
-                          {product.originalPrice > product.price && (
-                            <span className="text-lg text-gray-500 line-through">
-                              {formatPrice(product.originalPrice)}
-                            </span>
-                          )}
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-0.5 star-rating">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              onClick={() => handleRatingChange(product.id, star)}
+                              aria-label={`ให้คะแนน ${star} ดาว`}
+                              className={`text-lg transition ${star <= (productRatings[product.id] || 0) ? 'text-yellow-400 hover:text-yellow-500' : 'text-gray-300 hover:text-yellow-400'}`}
+                            >
+                              <FaStar />
+                            </button>
+                          ))}
                         </div>
+                        <span className="text-xs text-gray-500">
+                          ({productRatings[product.id] || 0}/5)
+                        </span>
                       </div>
-                      <div className="flex gap-3">
+
+                      <div className="flex items-end gap-2">
+                        <span className="text-2xl font-extrabold text-green-600">
+                          {formatPrice(product.price)}
+                        </span>
+                        {Number(product.originalPrice) > Number(product.price) && (
+                          <span className="text-sm text-gray-500 line-through">
+                            {formatPrice(product.originalPrice)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-2 grid grid-cols-2 gap-2">
                         <button
-                          className="flex-1 py-3.5 px-6 rounded-2xl font-semibold transition-all duration-300 bg-gradient-to-r from-green-600 to-green-500 text-white hover:from-green-700 hover:to-green-600 active:transform active:scale-95 shadow-md hover:shadow-lg"
+                          className="rounded-xl border-2 border-green-600 bg-gradient-to-r from-green-600 to-green-500 py-2.5 font-semibold text-white shadow-sm transition-all hover:from-green-700 hover:to-green-600 active:scale-[0.98]"
                           onClick={() => handleAddToCart(product)}
                         >
                           เพิ่มลงตะกร้า
                         </button>
                         <button
-                          className="flex-1 py-3.5 px-6 rounded-2xl font-semibold transition-all duration-300 bg-white border-2 border-green-500 text-green-600 hover:bg-green-50 hover:border-green-600 hover:text-green-700 active:transform active:scale-95 shadow-md hover:shadow-lg"
+                          className="rounded-xl border-2 border-green-500 bg-white py-2.5 font-semibold text-green-600 transition hover:bg-green-50 active:scale-[0.98]"
                           onClick={() => handleBuyNow(product)}
                         >
                           สั่งซื้อเลย
                         </button>
                       </div>
-                      <div className="flex gap-2 justify-between mb-2 items-center">
-                        <div className="flex items-center gap-2">
-                          <div className="flex gap-1 star-rating">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <button
-                                key={star}
-                                onClick={() => handleRatingChange(product.id, star)}
-                                className={`text-xl transition-colors ${star === 0
-                                  ? (productRatings[product.id] === 0 ? 'text-gray-400 hover:text-yellow-400' : 'text-gray-300 hover:text-yellow-400')
-                                  : star <= (productRatings[product.id] || 0)
-                                    ? 'text-yellow-400 hover:text-yellow-500'
-                                    : 'text-gray-300 hover:text-yellow-400'
-                                  }`}
-                                title={star === 0 ? 'ให้คะแนน 0 ดาว' : `ให้คะแนน ${star} ดาว`}
-                              >
-                                <FaStar />
-                              </button>
-                            ))}
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            ({productRatings[product.id] || 0}/5)
-                          </span>
-                        </div>
+
+                      <div className="flex items-center justify-between">
                         <button
-                          onClick={() => handleFavorite(product.id)}
-                          className="text-pink-500 hover:text-pink-700 text-2xl transition"
-                          title="รายการโปรด"
+                          className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${comparison.find((p) => p.id === product.id)
+                            ? "border-yellow-500 bg-yellow-100 text-yellow-800"
+                            : "border-yellow-300 bg-white text-yellow-700 hover:bg-yellow-50"
+                            }`}
+                          onClick={() => handleCompareToggle(product)}
                         >
-                          {favoritedProducts[product.id] ? <FaHeart /> : <FaRegHeart />}
+                          {comparison.find((p) => p.id === product.id) ? "นำออกจากเปรียบเทียบ" : "เปรียบเทียบ"}
                         </button>
+
+                        <Link
+                          className="text-sm font-semibold text-green-600 underline-offset-4 transition hover:text-green-700 hover:underline"
+                          to={`/products/${product.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          ดูรายละเอียด
+                        </Link>
                       </div>
-                      <button
-                        className={`w-full py-2 px-4 rounded-lg font-semibold border-2 transition duration-300 ${comparison.find((p) => p.id === product.id)
-                          ? "border-yellow-500 bg-yellow-100 text-yellow-800"
-                          : "border-yellow-300 bg-white text-yellow-700 hover:bg-yellow-50"
-                          }`}
-                        onClick={() => handleCompareToggle(product)}
-                      >
-                        {comparison.find((p) => p.id === product.id)
-                          ? "นำออกจากเปรียบเทียบ"
-                          : "เปรียบเทียบ"}
-                      </button>
-                      <Link
-                        className="text-green-500 hover:underline"
-                        to={`/products/${product.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                        }}
-                      >
-                        ดูรายละเอียด
-                      </Link>
                     </div>
                   </div>
                 ))}
               </div>
-              {/* Pagination Controls */}
+
+              {/* Pagination Controls (โทนเขียว) */}
               {totalPages > 1 && (
                 <div className="flex justify-center items-center mt-8 gap-2">
                   <button
@@ -658,8 +672,8 @@ function Products() {
                     <button
                       key={i + 1}
                       className={`px-3 py-2 rounded-lg font-semibold ${currentPage === i + 1
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-blue-100"
+                        ? "bg-green-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-green-100"
                         }`}
                       onClick={() => handlePageChange(i + 1)}
                     >
@@ -689,9 +703,10 @@ function Products() {
             <p className="text-xl text-gray-600">ไม่มีสินค้าในระบบ</p>
           </div>
         )}
+
         {/* Compare Modal */}
         {showCompare && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="bg-gradient-to-br from-yellow-50 to-white rounded-3xl shadow-2xl max-w-5xl w-full p-8 relative border-2 border-yellow-200 animate-fadeIn">
               <button
                 className="absolute top-4 right-4 text-gray-400 hover:text-red-500 text-3xl font-bold"
@@ -728,8 +743,8 @@ function Products() {
                               className="h-24 w-24 object-cover rounded-xl border mb-2 shadow"
                               loading="lazy"
                               onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = "/images/no-image.png";
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = "/images/no-image.png";
                               }}
                             />
                             <span className="font-bold text-base text-gray-800 text-center line-clamp-2 max-w-[120px]">
@@ -751,7 +766,7 @@ function Products() {
                           className="p-4 text-blue-600 font-bold border-b border-yellow-100 text-center text-xl"
                         >
                           {formatPrice(p.price)}
-                          {p.originalPrice > p.price && (
+                          {Number(p.originalPrice) > Number(p.price) && (
                             <span className="ml-2 text-red-500 text-sm line-through">
                               {formatPrice(p.originalPrice)}
                             </span>
@@ -805,8 +820,9 @@ function Products() {
           </div>
         )}
       </div>
-      {/* Modal removed; navigating to /products/:id instead */}
-      <div className="fixed bottom-25 right-6 z-10 flex flex-col items-end gap-4">
+
+      {/* ปุ่มเลื่อนขึ้น (แก้ bottom-25 → bottom-[25px]) */}
+      <div className="fixed bottom-[25px] right-6 z-10 flex flex-col items-end gap-4">
         {showScrollTop && (
           <button
             onClick={scrollToTop}

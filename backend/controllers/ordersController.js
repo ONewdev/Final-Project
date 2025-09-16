@@ -290,6 +290,13 @@ exports.createOrder = async (req, res) => {
         quantity: item.quantity,
         price: product.price,
       });
+      // ตัดจำนวนสินค้าใน products table ตามจำนวนที่ซื้อ
+      const newQty = product.quantity - item.quantity;
+      if (newQty < 0) {
+        await trx.rollback();
+        return res.status(400).json({ message: `สินค้า ${product.name} มีจำนวนไม่พอในคลัง` });
+      }
+      await trx('products').where({ id: item.product_id }).update({ quantity: newQty });
     }
 
     if (order_type === 'custom' && customDetails) {
@@ -392,11 +399,20 @@ exports.getOrdersByCustomer = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
-
-    const changed = await db('orders').where({ id }).update({ status });
+    let { status } = req.body;
+    // ตรวจสอบสถานะที่อนุญาต
+    const allowed = ['pending', 'approved', 'shipped', 'delivered', 'cancelled'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+    // อัปเดตวันที่ตามสถานะ
+    const updateData = { status };
+    if (status === 'approved') updateData.approved_at = db.fn.now();
+    if (status === 'shipped') updateData.shipped_at = db.fn.now();
+    if (status === 'delivered') updateData.delivered_at = db.fn.now();
+    if (status === 'cancelled') updateData.cancelled_at = db.fn.now();
+    const changed = await db('orders').where({ id }).update(updateData);
     if (!changed) return res.status(404).json({ message: 'Order not found' });
-
     res.json({ message: 'Order status updated' });
   } catch (err) {
     console.error('Error updating order status:', err);
@@ -466,13 +482,21 @@ exports.cancelOrder = async (req, res) => {
     const order = await db('orders').where({ id }).first();
     if (!order) return res.status(404).json({ message: 'ไม่พบคำสั่งซื้อนี้' });
 
+    // คืน stock สินค้า
+    const items = await db('order_items').where({ order_id: id });
+    for (const item of items) {
+      await db('products')
+        .where({ id: item.product_id })
+        .increment('quantity', item.quantity);
+    }
+
     await db('orders').where({ id }).update({ status: 'cancelled', cancelled_at: db.fn.now() });
 
     await sendNotification({
       customer_id: order.customer_id,
       type: 'warning',
       title: 'คำสั่งซื้อถูกยกเลิก',
-      message: `คำสั่งซื้อ #${id} ถูกยกเลิกแล้ว`,
+      message: `คำสั่งซื้อ #${id} ถูกยกเลิกแล้ว และคืนสินค้าเข้าสต็อก`,
     });
 
     const updated = await db('orders').where({ id }).first();
