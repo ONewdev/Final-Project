@@ -3,38 +3,24 @@ const router = express.Router();
 const customerController = require('../controllers/customerController');
 const { authenticateCustomer } = require('../middlewares/customerAuth');
 
-// ตรวจสอบ JWT ลูกค้า (cookie auth)
+// ------- Authenticated (ลูกค้า) -------
 router.get('/me', authenticateCustomer, (req, res) => {
   res.json({ success: true, user: req.customer });
 });
 
-// ดึงข้อมูล user profile (ใช้ token)
 router.get('/profile', authenticateCustomer, async (req, res) => {
   try {
     const db = require('../db');
     const user = await db('customers')
       .select(
-        'id',
-        'email',
-        'name',
-        'status',
-        'profile_picture',
-        'created_at',
-        'updated_at',
-        'phone',
-        'address',
-        'province_id',
-        'district_id',
-        'subdistrict_id',
-        'postal_code'
+        'id','email','name','status','profile_picture',
+        'created_at','updated_at','phone','address',
+        'province_id','district_id','subdistrict_id','postal_code'
       )
       .where({ id: req.customer.user_id })
       .first();
 
-    if (!user) {
-      return res.status(404).json({ message: 'ไม่พบผู้ใช้งาน' });
-    }
-
+    if (!user) return res.status(404).json({ message: 'ไม่พบผู้ใช้งาน' });
     res.status(200).json(user);
   } catch (error) {
     console.error('Error fetching user profile:', error.message);
@@ -42,35 +28,44 @@ router.get('/profile', authenticateCustomer, async (req, res) => {
   }
 });
 
-
-// ดึงข้อมูลที่อยู่ของลูกค้า (ต้องมาก่อน /:id)
+// ------- Master data (ต้องมาก่อน /:id) -------
 router.get('/provinces', customerController.getProvinces);
 router.get('/districts', customerController.getDistricts);
 router.get('/subdistricts', customerController.getSubdistricts);
 
-//ดึง
+// ------- Public/ทั่วไป -------
 router.get('/', customerController.getAllCustomers);
-//ลบ
-router.delete('/:id', customerController.deleteCustomer);
-//สถานะ
-router.patch('/:id/status', customerController.changeCustomerStatus);
-//อัปเดตข้อมูลทั่วไป
-router.patch('/:id', customerController.updateCustomer);
-//ลงทะเบียน
-router.post('/login', customerController.login);
-// ดึงข้อมูลลูกค้า 1 คน
-router.get('/:id', customerController.getCustomerById);
-// อัปเดตโปรไฟล์
-router.put('/:id', customerController.uploadProfilePicture, customerController.updateCustomerProfile);
-//สมัครสมาชิก
-router.post('/register', customerController.registerCustomer); 
 
-// ดึงรายการโปรดของลูกค้า
+// ------- Auth ลูกค้า (วางไว้ก่อนทุกเส้นทางที่มี :id) -------
+// ถ้าจะให้ path อยู่ใต้ /api/customers ก็จะเป็น /api/customers/verify-email เป็นต้น
+// แนะนำให้แยกไปที่ /api/auth ในไฟล์ router อื่น แต่ถ้าจะอยู่ที่นี่ก็ได้
+router.get('/verify-email', customerController.verifyEmail);
+router.post('/forgot-password', customerController.forgotPassword);
+router.get('/verify-reset-token', customerController.verifyResetToken);
+router.post('/reset-password', customerController.resetPassword);
+
+// ------- เส้นทางที่มีพาธย่อยจาก :id (ต้องมาก่อน /:id เดี่ยว) -------
 router.get('/:id/favorites', customerController.getCustomerFavorites);
-// ลบโปรไฟล์ลูกค้า (delete account)
 router.delete('/:id/delete', customerController.deleteCustomerProfile);
-// ลบเฉพาะรูปโปรไฟล์ ไม่ลบบัญชี
 router.delete('/:id/profile-picture', customerController.deleteProfilePicture);
 
+// เส้นทางแก้ไขเฉพาะฟิลด์ (เฉพาะสถานะ) ควรอยู่ก่อน patch put ทั่วไป
+router.patch('/:id/status', customerController.changeCustomerStatus);
+
+// อัปเดตโปรไฟล์ (อัปโหลดไฟล์) — ใช้ PUT สำหรับโปรไฟล์ผู้ใช้
+router.put('/:id', customerController.uploadProfilePicture, customerController.updateCustomerProfile);
+
+// อัปเดตข้อมูลทั่วไปแบบ admin ใช้ PATCH
+router.patch('/:id', customerController.updateCustomer);
+
+// ------- Auth ลูกค้า (login/register) -------
+router.post('/login', customerController.login);
+router.post('/register', customerController.registerCustomer);
+
+// สุดท้ายค่อยวางตัวกินพาธเดี่ยว ๆ
+router.get('/:id', customerController.getCustomerById);
+
+// ลบลูกค้าทั่วไป (ต้องอยู่ท้าย ๆ เพื่อไม่ชนพาธอื่น)
+router.delete('/:id', customerController.deleteCustomer);
 
 module.exports = router;

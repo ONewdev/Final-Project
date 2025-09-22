@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -26,12 +27,28 @@ const STATUS_CLASS = {
   finished: 'bg-green-100 text-green-800',
 };
 
+function formatDateTimeTH(dt) {
+  if (!dt) return '-';
+  const d = new Date(dt);
+  return d.toLocaleString('th-TH', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+}
+
+
 function OrdersCustom() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [modalOrder, setModalOrder] = useState(null);
+  const [modalLoading, setModalLoading] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -57,6 +74,20 @@ function OrdersCustom() {
 
     fetchOrders();
   }, [user, navigate]);
+
+  const handleShowDetail = async (orderId) => {
+    setModalLoading(true);
+    try {
+      const res = await fetch(`${host}/api/custom/orders/${orderId}`);
+      if (!res.ok) throw new Error('ไม่พบข้อมูล');
+      const data = await res.json();
+      setModalOrder(data);
+    } catch {
+      setModalOrder(null);
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -94,6 +125,7 @@ function OrdersCustom() {
                 <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ราคา</th>
                 <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">สถานะ</th>
                 <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่</th>
+                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ดูรายละเอียด</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -106,17 +138,69 @@ function OrdersCustom() {
                   <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-700">{o.quantity}</td>
                   <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-700">฿{Number(o.price || 0).toLocaleString()}</td>
                   <td className="px-4 md:px-6 py-3 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${STATUS_CLASS[o.status] || 'bg-gray-100 text-gray-800'}`}>
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${STATUS_CLASS[o.status] || 'bg-gray-100 text-gray-800'}`}> 
                       {STATUS_TEXT[o.status] || o.status}
                     </span>
                   </td>
                   <td className="px-4 md:px-6 py-3 whitespace-nowrap text-xs text-gray-500">
-                    {o.created_at ? new Date(o.created_at).toLocaleString('th-TH') : '-'}
+                    {formatDateTimeTH(o.created_at)}
+                  </td>
+                  <td className="px-4 md:px-6 py-3 whitespace-nowrap">
+                    <button
+                      className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold"
+                      onClick={() => handleShowDetail(o.id)}
+                    >
+                      ดูรายละเอียด
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal แสดงรายละเอียดออเดอร์ */}
+      {modalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-xl relative">
+            <button
+              onClick={() => setModalOrder(null)}
+              className="absolute top-2 right-2 px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
+            >
+              ปิด
+            </button>
+            <h3 className="text-xl font-bold mb-4">รายละเอียดคำสั่งทำ #{modalOrder.id}</h3>
+            {modalLoading ? (
+              <div className="text-gray-500">กำลังโหลด...</div>
+            ) : (
+              <>
+                <div className="mb-2">
+                  <span className="font-semibold">สถานะ: </span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CLASS[modalOrder.status] || 'bg-gray-100 text-gray-800'}`}>{STATUS_TEXT[modalOrder.status] || modalOrder.status}</span>
+                </div>
+                <div className="mb-2"><span className="font-semibold">ประเภท:</span> {modalOrder.product_type}</div>
+                <div className="mb-2"><span className="font-semibold">ขนาด:</span> {modalOrder.width}x{modalOrder.height} {modalOrder.unit}</div>
+                <div className="mb-2"><span className="font-semibold">สี:</span> {modalOrder.color}</div>
+                <div className="mb-2"><span className="font-semibold">จำนวน:</span> {modalOrder.quantity}</div>
+                <div className="mb-2"><span className="font-semibold">ราคา:</span> ฿{Number(modalOrder.price || 0).toLocaleString()}</div>
+                <div className="mb-2"><span className="font-semibold">วันที่สั่ง:</span> {formatDateTimeTH(modalOrder.created_at)}</div>
+                {modalOrder.details && (
+                  <div className="mb-2"><span className="font-semibold">รายละเอียดเพิ่มเติม:</span> {modalOrder.details}</div>
+                )}
+                {modalOrder.files && modalOrder.files.length > 0 && (
+                  <div className="mb-2">
+                    <span className="font-semibold">ไฟล์แนบ:</span>
+                    <ul className="list-disc pl-6 mt-2">
+                      {modalOrder.files.map(f => (
+                        <li key={f.id}><a href={f.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{f.filename}</a></li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

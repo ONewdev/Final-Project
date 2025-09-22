@@ -6,7 +6,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 // const cookieParser = require('cookie-parser');
 
-const authRoutes = require('./routes/auth');
+const adminAuthRoutes = require('./routes/authAdmin');
 const customersRouter = require('./routes/customers');
 const productsRouter = require('./routes/products');
 const contactRouter = require('./routes/contact');
@@ -45,7 +45,7 @@ app.get('/', (req, res) => {
 // app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 // Routes
-app.use('/api', authRoutes);
+app.use('/api', adminAuthRoutes);
 app.use('/api/customers', customersRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/contact', contactRouter);

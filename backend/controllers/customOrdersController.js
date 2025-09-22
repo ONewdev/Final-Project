@@ -94,12 +94,20 @@ exports.createOrder = async (req, res) => {
 exports.listOrders = async (req, res) => {
   try {
     const { user_id } = req.query || {};
-    let query = db('custom_orders').select('*').orderBy('created_at', 'desc');
+    let query = db('custom_orders as o')
+      .leftJoin('customers as c', 'o.user_id', 'c.id')
+      .select(
+        'o.*',
+  db.raw('c.name as customer_name')
+      )
+      .orderBy('o.created_at', 'desc');
+
     if (user_id) {
       const uid = Number(user_id);
       if (!uid) return res.status(400).json({ message: 'invalid user_id' });
-      query = query.where({ user_id: uid });
+      query = query.where('o.user_id', uid);
     }
+
     const rows = await query;
     const shaped = rows.map(r => ({
       ...r,
@@ -112,6 +120,21 @@ exports.listOrders = async (req, res) => {
   }
 };
 
+
+const ALLOWED = new Set(['pending','approved','waiting_payment','paid','in_production','delivering','completed','rejected']);
+
+// แผนผังการย้ายสถานะ (อนุญาตเฉพาะบางเส้นทาง)
+const NEXT = {
+  pending: ['approved','rejected','waiting_payment'],
+  waiting_payment: ['paid','rejected'],
+  paid: ['in_production','rejected'],
+  approved: ['in_production','rejected'],
+  in_production: ['delivering','rejected'],
+  delivering: ['completed'],
+  completed: [],
+  rejected: []
+};
+
 exports.updateOrderStatus = async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -121,27 +144,35 @@ exports.updateOrderStatus = async (req, res) => {
     if (!status || typeof status !== 'string') {
       return res.status(400).json({ message: 'invalid status' });
     }
+    // map FE->DB
+    const target = (status === 'finished') ? 'completed' : status;
+    if (!ALLOWED.has(target)) return res.status(400).json({ message: 'invalid status' });
 
-    const normalized = status === 'finished' ? 'completed' : status;
-    const allowed = new Set([
-      'pending',
-      'approved',
-      'waiting_payment',
-      'paid',
-      'in_production',
-      'delivering',
-      'completed',
-      'rejected',
-    ]);
-    if (!allowed.has(normalized)) {
-      return res.status(400).json({ message: 'invalid status' });
+    const current = await db('custom_orders').where({ id }).first('status');
+    if (!current) return res.status(404).json({ message: 'custom order not found' });
+
+    // ตรวจเส้นทาง
+    if (!NEXT[current.status]?.includes(target)) {
+      return res.status(409).json({ message: `cannot change status from ${current.status} to ${target}` });
     }
 
-    const updated = await db('custom_orders')
-      .where({ id })
-      .update({ status: normalized, updated_at: db.fn.now() });
+    await db.transaction(async trx => {
+      await trx('custom_orders')
+        .where({ id })
+        .update({ status: target, updated_at: trx.fn.now() });
 
-    if (!updated) return res.status(404).json({ message: 'custom order not found' });
+      // log การเปลี่ยนสถานะ
+      await trx('custom_order_status_logs').insert({
+        order_id: id,
+        from_status: current.status,
+        to_status: target,
+        changed_at: trx.fn.now()
+      });
+
+      // (ออปชั่น) แจ้งเตือนลูกค้า
+      // await trx('notifications').insert({ ... })
+    });
+
     return res.json({ success: true });
   } catch (e) {
     console.error('updateOrderStatus error:', e);
@@ -149,3 +180,40 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
+exports.getOrderById = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ message: 'invalid id' });
+
+    // ดึงออเดอร์ + ลูกค้า
+    const order = await db('custom_orders as o')
+      .leftJoin('customers as c', 'o.user_id', 'c.id')
+      .select(
+        'o.*',
+  db.raw('c.name as customer_name')
+      )
+      .where('o.id', id)
+      .first();
+
+    if (!order) return res.status(404).json({ message: 'not found' });
+
+    // แนบไฟล์ (ถ้ามีตารางไฟล์)
+    let files = [];
+    try {
+      files = await db('custom_order_files')
+        .select('id','filename','url')
+        .where({ order_id: id });
+    } catch (_) {}
+
+    // shape สถานะให้ FE
+    const shaped = {
+      ...order,
+      status: order.status === 'completed' ? 'finished' : order.status,
+      files
+    };
+    return res.json(shaped);
+  } catch (e) {
+    console.error('getOrderById error:', e);
+    return res.status(500).json({ message: 'cannot get detail' });
+  }
+};

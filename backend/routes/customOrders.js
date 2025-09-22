@@ -1,17 +1,12 @@
+// routes/customOrders.js
 const express = require('express');
-const { createOrder, estimatePrice, listOrders, updateOrderStatus } = require('../controllers/customOrdersController');
+const ctrl = require('../controllers/customOrdersController');
 const router = express.Router();
 
-// POST /api/custom/estimate
-router.post('/estimate', estimatePrice);
-
-// POST /api/custom/order
-router.post('/order', createOrder);
-
-// GET /api/custom/orders (admin list)
-router.get('/orders', listOrders);
-
-// PUT /api/custom/order/:id/status (admin update)
-router.put('/order/:id/status', updateOrderStatus);
+router.post('/orders/estimate', ctrl.estimatePrice);
+router.post('/orders', ctrl.createOrder);
+router.get('/orders', ctrl.listOrders);
+router.get('/orders/:id', ctrl.getOrderById);        // NEW: รายละเอียด
+router.put('/order/:id/status', ctrl.updateOrderStatus);
 
 module.exports = router;

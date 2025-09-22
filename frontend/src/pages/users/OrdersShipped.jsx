@@ -12,10 +12,11 @@ function OrdersShipped() {
 
   const getStatusText = (status) => {
     const statusMap = {
-      pending: 'รอการยืนยัน',
+      pending: 'รอชำระเงิน/รออนุมัติ',
+      approved: 'ชำระเงินแล้ว/อนุมัติแล้ว',
       confirmed: 'ยืนยันแล้ว',
       processing: 'กำลังดำเนินการ',
-      shipped: 'จัดส่งแล้ว',
+      shipped: 'กำลังจัดส่ง',
       delivered: 'จัดส่งสำเร็จ',
       cancelled: 'ยกเลิก',
     };
@@ -25,6 +26,7 @@ function OrdersShipped() {
   const getStatusColor = (status) => {
     const colorMap = {
       pending: 'bg-yellow-100 text-yellow-800',
+      approved: 'bg-blue-100 text-blue-800',
       confirmed: 'bg-blue-100 text-blue-800',
       processing: 'bg-purple-100 text-purple-800',
       shipped: 'bg-amber-100 text-amber-800',
@@ -173,13 +175,21 @@ function OrdersShipped() {
 
                         {/* ปุ่มเฉพาะหน้า Shipped */}
                         <div className="flex gap-2 flex-wrap">
-                          {false && order.status === 'shipped' && (
-                            <button
-                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
-                              onClick={() => handleConfirmOrder(order.id)}
-                            >
-                              ยืนยันรับสินค้า
-                            </button>
+                          {order.status === 'shipped' && (
+                            <>
+                              <button
+                                className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
+                                onClick={() => handleConfirmOrder(order.id)}
+                              >
+                                ยืนยันรับสินค้า
+                              </button>
+                              <button
+                                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                                onClick={() => navigate(`/users/order/${order.id}`)}
+                              >
+                                ดูรายละเอียด
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>

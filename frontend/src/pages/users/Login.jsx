@@ -19,12 +19,12 @@ export default function Login() {
         headers: {
           'Content-Type': 'application/json'
         },
-        // credentials: 'include', // ไม่ใช้ cookie อีกต่อไป
+        // credentials: 'include', // … cookie …
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
       if (res.ok) {
-        // เก็บ user และ token ลง localStorage
+        // save token and user
         if (data.token) {
           localStorage.setItem('token', data.token);
         }
@@ -33,7 +33,7 @@ export default function Login() {
         Swal.fire({
           icon: 'success',
           title: 'เข้าสู่ระบบสำเร็จ',
-          text: 'ยินดีต้อนรับกลับ!',
+          text: 'กำลังพากลับไปหน้าแรก!',
           timer: 1200,
           showConfirmButton: false
         }).then(() => {
@@ -41,33 +41,68 @@ export default function Login() {
           navigate('/home');
         });
       } else {
-        // ตรวจสอบสถานะ HTTP เพื่อแสดงข้อความที่เหมาะสม
         if (res.status === 403) {
           Swal.fire({
             icon: 'warning',
-            title: 'บัญชีถูกปิดใช้งาน',
-            text: data.message || 'บัญชีของคุณถูกปิดใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
-            confirmButtonText: 'เข้าใจแล้ว'
+            title: 'บัญชีถูกระงับการใช้งาน',
+            text: data.message || 'บัญชีของคุณถูกระงับชั่วคราว กรุณาติดต่อผู้ดูแลระบบ',
+            confirmButtonText: 'ตกลง'
           });
         } else {
           Swal.fire({
             icon: 'error',
             title: 'เข้าสู่ระบบไม่สำเร็จ',
-            text: data.message || 'เข้าสู่ระบบไม่สำเร็จ',
+            text: data.message || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
           });
         }
       }
     } catch (error) {
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      alert('เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ฟังก์ชัน handleKeyDown สำหรับ Enter
+  // Enter key submit
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       handleSubmit();
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    try {
+      const { value: inputEmail } = await Swal.fire({
+        title: 'ลืมรหัสผ่าน',
+        input: 'email',
+        inputLabel: 'กรอกอีเมลที่ใช้สมัคร',
+        inputValue: email,
+        inputPlaceholder: 'you@example.com',
+        confirmButtonText: 'ส่งลิงก์รีเซ็ต',
+        showCancelButton: true,
+        cancelButtonText: 'ยกเลิก',
+        validationMessage: 'กรุณากรอกอีเมลให้ถูกต้อง',
+        inputValidator: (value) => {
+          if (!value || !value.includes('@')) return 'กรุณากรอกอีเมลให้ถูกต้อง';
+        },
+      });
+      if (!inputEmail) return;
+
+      const res = await fetch(`${host}/api/customers/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: String(inputEmail).trim() })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'ส่งอีเมลไม่สำเร็จ');
+
+      Swal.fire({
+        icon: 'success',
+        title: 'ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว',
+        text: 'โปรดตรวจสอบอีเมลของคุณ หากไม่พบให้ตรวจสอบในกล่องสแปม'
+      });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message || 'ไม่สามารถส่งอีเมลได้' });
     }
   };
 
@@ -97,11 +132,11 @@ export default function Login() {
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full mb-4">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 007 7H5a7 7 0 007-7z" />
               </svg>
             </div>
-            <h2 className="text-3xl font-bold text-gray-800 mb-2">ยินดีต้อนรับกลับ</h2>
-            <p className="text-gray-600">กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ</p>
+            <h2 className="text-2xl font-bold text-gray-800">เข้าสู่ระบบ</h2>
+            <p className="text-gray-500 mt-2">ยินดีต้อนรับกลับสู่ ALShop</p>
           </div>
 
           {/* Form */}
@@ -147,7 +182,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="••••••••••"
+                  placeholder="••••••••"
                   className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
                   required
                 />
@@ -157,7 +192,7 @@ export default function Login() {
             {/* Forgot Password */}
             <div className="text-right">
               <button
-                type="button"
+                type="button" onClick={handleForgotPassword}
                 className="text-sm text-green-600 hover:text-green-700 font-medium transition-colors duration-200"
               >
                 ลืมรหัสผ่าน?
@@ -193,7 +228,7 @@ export default function Login() {
 
             {/* Register Link */}
             <div className="text-center space-y-4">
-              <p className="text-gray-600">ยังไม่มีบัญชีใช่ไหม?</p>
+              <p className="text-gray-600">ยังไม่มีบัญชีผู้ใช้?</p>
               <button
                 type="button"
                 onClick={() => navigate('/register')}
@@ -210,3 +245,4 @@ export default function Login() {
     </div>
   );
 }
+

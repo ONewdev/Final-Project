@@ -1,4 +1,5 @@
 
+
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
@@ -16,31 +17,13 @@ function flexibleSingleFile(req, res, next) {
   return upload.single(field)(req, res, next);
 }
 
-// POST /api/payments (แจ้งชำระเงิน)
+// แจ้งชำระเงิน (POST /api/payments)
 router.post('/', flexibleSingleFile, paymentController.createPayment);
 
-// GET /api/payments?status=pending
-router.get('/', async (req, res) => {
-  try {
-    const { status } = req.query;
-    // join กับ customers เพื่อดึงชื่อผู้โอน
-    const payments = await db('payments')
-      .leftJoin('customers', 'payments.customer_id', 'customers.id')
-      .select(
-        'payments.*',
-        'customers.name as customer_name'
-      )
-      .modify((qb) => {
-        if (status) qb.where('payments.status', status);
-      })
-      .orderBy('payments.created_at', 'desc');
-    res.json(payments);
-  } catch (err) {
-    res.status(500).json({ error: 'ไม่สามารถดึงข้อมูลการโอนเงินได้' });
-  }
-});
+// ตรวจสอบสถานะการชำระเงิน (GET /api/payments/status/:order_id)
+router.get('/status/:order_id', paymentController.checkPaymentStatus);
 
-// PUT /api/payments/:id/status
+// อัปเดตสถานะการชำระเงิน (PUT /api/payments/:id/status)
 router.put('/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
@@ -69,4 +52,27 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
+// ดึงรายการการชำระเงินทั้งหมด (GET /api/payments?status=pending)
+router.get('/', async (req, res) => {
+  try {
+    const { status } = req.query;
+    // join กับ customers เพื่อดึงชื่อผู้โอน
+    const payments = await db('payments')
+      .leftJoin('customers', 'payments.customer_id', 'customers.id')
+      .select(
+        'payments.*',
+        'customers.name as customer_name'
+      )
+      .modify((qb) => {
+        if (status) qb.where('payments.status', status);
+      })
+      .orderBy('payments.created_at', 'desc');
+    res.json(payments);
+  } catch (err) {
+    res.status(500).json({ error: 'ไม่สามารถดึงข้อมูลการโอนเงินได้' });
+  }
+});
+
 module.exports = router;
+
+

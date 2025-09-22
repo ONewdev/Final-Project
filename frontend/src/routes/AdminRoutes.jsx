@@ -15,7 +15,7 @@ import ReportOrder from "../pages/admin/ReportOrder";
 import ReportSales from "../pages/admin/ReportSales";
 import ReportProfit from "../pages/admin/ReportProfit";
 import Inbox from "../pages/admin/Inbox";
-import Custom_Orders from "../pages/admin/Custom_Orders"; 
+import Custom_Orders from "../pages/admin/OrdersCustom"; 
 import Login from "../pages/admin/Login";
 import PrivateRoute from "../utils/PrivateRoute";
 

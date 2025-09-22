@@ -12,27 +12,27 @@ function OrdersDelivered() {
 
   const getStatusText = (status) => {
     const statusMap = {
-      pending: 'รอการยืนยัน',
+      pending: 'รอชำระเงิน/รออนุมัติ',
+      approved: 'ชำระเงินแล้ว/อนุมัติแล้ว',
       confirmed: 'ยืนยันแล้ว',
       processing: 'กำลังดำเนินการ',
-      shipped: 'จัดส่งแล้ว',
+      shipped: 'กำลังจัดส่ง',
       delivered: 'จัดส่งสำเร็จ',
       cancelled: 'ยกเลิก',
     };
     return statusMap[status] || status;
   };
 
-  const getStatusColor = (status) => {
-    const colorMap = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      processing: 'bg-purple-100 text-purple-800',
-      shipped: 'bg-amber-100 text-amber-800',
-      delivered: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-    };
-    return colorMap[status] || 'bg-gray-100 text-gray-800';
+  const colorMap = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    approved: 'bg-blue-100 text-blue-800',
+    confirmed: 'bg-blue-100 text-blue-800',
+    processing: 'bg-purple-100 text-purple-800',
+    shipped: 'bg-amber-100 text-amber-800',
+    delivered: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800',
   };
+  const getStatusColor = (status) => colorMap[status] || 'bg-gray-100 text-gray-800';
 
   const groupOrdersByDate = (list) => {
     const grouped = {};
@@ -151,7 +151,7 @@ function OrdersDelivered() {
                         <div className="mt-3 flex gap-2 flex-wrap">
                           <button
                             className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-                            onClick={() => navigate(`/users/orders/${order.id}`)}
+                            onClick={() => navigate(`/users/order/${order.id}`)}
                           >
                             ดูรายละเอียด
                           </button>

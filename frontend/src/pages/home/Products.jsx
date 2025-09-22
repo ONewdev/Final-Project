@@ -500,7 +500,7 @@ function Products() {
               <div className="w-full lg:w-auto lg:ml-auto">
                 <button
                   className="w-full lg:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded-full border-2 border-green-700 transition"
-                  onClick={() => navigate("/custom-order")}
+                  onClick={() => navigate("/custom")}
                 >
                   สั่งทำสินค้า
                 </button>

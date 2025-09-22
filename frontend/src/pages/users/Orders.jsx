@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import OrdersNavbar from '../../components/OrdersNavbar';
@@ -124,10 +125,11 @@ function Orders() {
   // แสดงสถานะคำสั่งซื้อ
   const getStatusText = (status) => {
     const statusMap = {
-      'pending': 'รอการยืนยัน',
+      'pending': 'รอชำระเงิน/รออนุมัติ',
+      'approved': 'ชำระเงินแล้ว/อนุมัติแล้ว',
       'confirmed': 'ยืนยันแล้ว',
       'processing': 'กำลังดำเนินการ',
-      'shipped': 'จัดส่งแล้ว',
+      'shipped': 'กำลังจัดส่ง',
       'delivered': 'จัดส่งสำเร็จ',
       'cancelled': 'ยกเลิก'
     };
@@ -137,9 +139,10 @@ function Orders() {
   const getStatusColor = (status) => {
     const colorMap = {
       'pending': 'bg-yellow-100 text-yellow-800',
+      'approved': 'bg-blue-100 text-blue-800',
       'confirmed': 'bg-blue-100 text-blue-800',
       'processing': 'bg-purple-100 text-purple-800',
-      'shipped': 'bg-green-100 text-green-800',
+      'shipped': 'bg-amber-100 text-amber-800',
       'delivered': 'bg-green-100 text-green-800',
       'cancelled': 'bg-red-100 text-red-800'
     };
@@ -192,12 +195,20 @@ function Orders() {
     );
   }
   const handleCancelOrder = async (orderId) => {
-    
-    // return alert('ยกเลิกออเดอร์ยังไม่พร้อมใช้งาน');
-    if (!window.confirm('คุณต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?')) return;
+    const result = await Swal.fire({
+      title: 'คุณต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?',
+      text: 'หากยกเลิกแล้วจะไม่สามารถย้อนกลับได้',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ยืนยัน',
+      cancelButtonText: 'ไม่ยกเลิก',
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+    });
+    if (!result.isConfirmed) return;
     try {
       const response = await fetch(`${host}/api/orders/${orderId}/cancel`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
@@ -207,11 +218,12 @@ function Orders() {
         if (updatedOrders.ok) {
           setOrders(await updatedOrders.json());
         }
+        Swal.fire('สำเร็จ', 'ยกเลิกออเดอร์เรียบร้อยแล้ว', 'success');
       } else {
-        alert('เกิดข้อผิดพลาดในการยกเลิกออเดอร์');
+        Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการยกเลิกออเดอร์', 'error');
       }
     } catch (error) {
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+      Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
       console.error('Error cancelling order:', error);
     }
   };
@@ -270,37 +282,62 @@ function Orders() {
                         </div>
                         {/* แสดงรายการสินค้าในออเดอร์ */}
                         <div className="flex flex-wrap gap-4 mb-2">
-                          {order.items && order.items.length > 0 ? order.items.map((item, idx) => (
-                            <div key={item.id || idx} className="flex items-center gap-2 border rounded p-2 bg-gray-50">
-                              {item.image_url && (
-                                <img src={`${host}${item.image_url}`} alt={item.product_name} className="w-12 h-12 object-cover rounded" />
+                          {order.items && order.items.length > 0 ? (
+                            <>
+                              {order.items.slice(0, 3).map((item, idx) => (
+                                <div key={item.id || idx} className="flex items-center gap-2 border rounded p-2 bg-gray-50">
+                                  {item.image_url && (
+                                    <img src={`${host}${item.image_url}`} alt={item.product_name} className="w-12 h-12 object-cover rounded" />
+                                  )}
+                                  <div>
+                                    <div className="font-medium">{item.product_name}</div>
+                                    <div className="text-xs text-gray-500">จำนวน: {item.quantity}</div>
+                                    <div className="text-xs text-gray-500">ราคา: {item.price !== undefined && item.price !== null && !isNaN(Number(item.price)) ? `฿${Number(item.price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '-'}</div>
+                                  </div>
+                                </div>
+                              ))}
+                              {order.items.length > 3 && (
+                                <div className="flex items-center gap-2 border rounded p-2 bg-gray-100 text-gray-600 text-xs font-medium">
+                                  +{order.items.length - 3} รายการ
+                                </div>
                               )}
-                              <div>
-                                <div className="font-medium">{item.product_name}</div>
-                                <div className="text-xs text-gray-500">จำนวน: {item.quantity}</div>
-                                <div className="text-xs text-gray-500">ราคา: {item.price !== undefined && item.price !== null && !isNaN(Number(item.price)) ? `฿${Number(item.price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '-'}</div>
-                              </div>
-                            </div>
-                          )) : <span className="text-gray-400">ไม่มีสินค้า</span>}
+                            </>
+                          ) : <span className="text-gray-400">ไม่มีสินค้า</span>}
                         </div>
                         <div className="flex gap-2 flex-wrap">
                           {/* ปุ่มชำระเงิน เฉพาะสถานะ pending เท่านั้น */}
                           {order.status === 'pending' && (
-                            <button
-                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-                              onClick={() => navigate(`/users/payments?order_id=${order.id}`)}
-                            >
-                              ชำระเงิน
-                            </button>
+                            <>
+                              <button
+                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                onClick={() => navigate(`/users/payments?order_id=${order.id}`)}
+                              >
+                                ชำระเงิน
+                              </button>
+                              <button
+                                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                                onClick={() => navigate(`/users/order/${order.id}`)}
+                              >
+                                ดูรายละเอียด
+                              </button>
+                            </>
                           )}
                           {/* ปุ่มยืนยันรับสินค้า เฉพาะสถานะ shipped */}
                           {order.status === 'shipped' && (
-                            <button
-                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
-                              onClick={() => handleConfirmOrder(order.id)}
-                            >
-                              ยืนยันรับสินค้า
-                            </button>
+                            <>
+                              <button
+                                className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
+                                onClick={() => handleConfirmOrder(order.id)}
+                              >
+                                ยืนยันรับสินค้า
+                              </button>
+                              <button
+                                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                                onClick={() => navigate(`/users/order/${order.id}`)}
+                              >
+                                ดูรายละเอียด
+                              </button>
+                            </>
                           )}
                           {/* ปุ่มยกเลิกออเดอร์ เฉพาะสถานะที่ยกเลิกได้ */}
                           {(order.status === 'pending' || order.status === 'confirmed' || order.status === 'processing') && (

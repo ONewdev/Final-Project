@@ -174,26 +174,33 @@ function OrdersPending() {
                         {/* แสดงรายการสินค้าในออเดอร์ */}
                         <div className="flex flex-wrap gap-4 mb-2">
                           {order.items && order.items.length > 0 ? (
-                            order.items.map((item, idx) => (
-                              <div key={item.id || idx} className="flex items-center gap-2 border rounded p-2 bg-gray-50">
-                                {item.image_url && (
-                                  <img
-                                    src={`${host}${item.image_url}`}
-                                    alt={item.product_name}
-                                    className="w-12 h-12 object-cover rounded"
-                                  />
-                                )}
-                                <div>
-                                  <div className="font-medium">{item.product_name}</div>
-                                  <div className="text-xs text-gray-500">จำนวน: {item.quantity}</div>
-                                  <div className="text-xs text-gray-500">
-                                    ราคา: {item.price !== undefined && item.price !== null && !isNaN(Number(item.price))
-                                      ? `฿${Number(item.price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
-                                      : '-'}
+                            <>
+                              {order.items.slice(0, 3).map((item, idx) => (
+                                <div key={item.id || idx} className="flex items-center gap-2 border rounded p-2 bg-gray-50">
+                                  {item.image_url && (
+                                    <img
+                                      src={`${host}${item.image_url}`}
+                                      alt={item.product_name}
+                                      className="w-12 h-12 object-cover rounded"
+                                    />
+                                  )}
+                                  <div>
+                                    <div className="font-medium">{item.product_name}</div>
+                                    <div className="text-xs text-gray-500">จำนวน: {item.quantity}</div>
+                                    <div className="text-xs text-gray-500">
+                                      ราคา: {item.price !== undefined && item.price !== null && !isNaN(Number(item.price))
+                                        ? `฿${Number(item.price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
+                                        : '-'}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))
+                              ))}
+                              {order.items.length > 3 && (
+                                <div className="flex items-center gap-2 border rounded p-2 bg-gray-100 text-gray-600 text-xs font-medium">
+                                  +{order.items.length - 3} รายการ
+                                </div>
+                              )}
+                            </>
                           ) : (
                             <span className="text-gray-400">ไม่มีสินค้า</span>
                           )}
@@ -215,6 +222,12 @@ function OrdersPending() {
                                 onClick={() => handleCancelOrder(order.id)}
                               >
                                 ยกเลิกออเดอร์
+                              </button>
+                              <button
+                                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                                onClick={() => navigate(`/users/order/${order.id}`)}
+                              >
+                                ดูรายละเอียด
                               </button>
                             </>
                           )}

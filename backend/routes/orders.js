@@ -27,11 +27,12 @@ router.put('/:id/approve', orderController.approveOrder);
 router.put('/:id/ship', orderController.shipOrder);
 
 // ยกเลิกคำสั่งซื้อ
-router.put('/:id/cancel', orderController.cancelOrder);
+router.patch('/:id/cancel', orderController.cancelOrder);
 
 router.get('/:id', orderController.getOrderById);
 
 router.get('/:orderId/receipt', generateReceiptPdf);
+
 
 module.exports = router;
 

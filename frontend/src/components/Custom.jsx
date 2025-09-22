@@ -157,7 +157,7 @@ function Custom() {
         fixedLeftM2: form.fixedLeftM2 === '' ? null : parseFloat(form.fixedLeftM2),
         fixedRightM2: form.fixedRightM2 === '' ? null : parseFloat(form.fixedRightM2)
       };
-      const res = await fetch(`${host}/api/custom/order`, {
+        const res = await fetch(`${host}/api/custom/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
