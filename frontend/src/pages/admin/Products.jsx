@@ -41,6 +41,7 @@ function Products() {
   const [editProduct, setEditProduct] = useState(null);
   const [detailProduct, setDetailProduct] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [colorOptions, setColorOptions] = useState([]);
   const [newProduct, setNewProduct] = useState({
     product_code: '',
     name: '',
@@ -48,6 +49,8 @@ function Products() {
     category_id: '',
     price: '',
     quantity: '',
+    size: '',
+    color: '',
     image: null,
     status: 'active',
   });
@@ -70,6 +73,19 @@ function Products() {
     };
 
     fetchCategories();
+
+    // Fetch color options from backend
+    const fetchColors = async () => {
+      try {
+        const res = await fetch(`${host}/api/colors`);
+        if (!res.ok) throw new Error('Failed to fetch colors');
+        const data = await res.json();
+        setColorOptions(data);
+      } catch (error) {
+        console.error('Fetch colors error:', error);
+      }
+    };
+    fetchColors();
 
   }, [host]);
 
@@ -195,6 +211,8 @@ function Products() {
       category_id: '',
       price: '',
       quantity: '',
+      size: '',
+      color: '',
       image: null,
       status: 'active',
     });
@@ -501,6 +519,34 @@ function Products() {
         >
           <form onSubmit={handleEditSubmit} className="space-y-4">
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ขนาด (size)</label>
+              <input
+                type="text"
+                name="size"
+                value={editProduct?.size || ''}
+                onChange={handleEditChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="เช่น 120x180 cm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">สี (color)</label>
+              <select
+                name="color"
+                value={editProduct?.color || ''}
+                onChange={handleEditChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">-- เลือกสี --</option>
+                <option value="ขาว">ขาว</option>
+                <option value="ดำ">ดำ</option>
+                <option value="เงิน">เงิน</option>
+                <option value="อบขาว">อบขาว</option>
+                <option value="ชา">ชา</option>
+                <option value="ลายไม้จามจุรี">ลายไม้จามจุรี</option>
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 รหัสสินค้า <span className="text-red-500">*</span>
               </label>
@@ -695,6 +741,14 @@ function Products() {
                         {detailProduct.status === 'active' ? 'แสดง' : 'ไม่แสดง'}
                       </span>
                     </div>
+                     <div>
+                       <p className="text-xs text-gray-500">ขนาด (size)</p>
+                       <p className="font-medium text-gray-900">{detailProduct.size || '-'}</p>
+                     </div>
+                     <div>
+                       <p className="text-xs text-gray-500">สี (color)</p>
+                       <p className="font-medium text-gray-900">{detailProduct.color || '-'}</p>
+                     </div>
                   </div>
                 </div>
               </div>
@@ -727,32 +781,54 @@ function Products() {
         >
           <form onSubmit={handleAddSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                รหัสสินค้า <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ขนาด (size)</label>
               <input
                 type="text"
-                name="product_code"
-                placeholder="กรอกรหัสสินค้า"
-                value={newProduct.product_code}
+                name="size"
+                placeholder="เช่น 120x180 cm"
+                value={newProduct.size}
                 onChange={handleAddChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                required
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">สี (color)</label>
+              <select
+                name="color"
+                value={newProduct.color}
+                onChange={handleAddChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="">-- เลือกสี --</option>
+                {colorOptions.map((color) => (
+                  <option key={color} value={color}>{color}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                ชื่อสินค้า <span className="text-red-500">*</span>
+                รหัสสินค้า <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                name="name"
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">สี (color)</label>
+                <select
+                  name="color"
+                  value={editProduct?.color || ''}
+                  onChange={handleEditChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">-- เลือกสี --</option>
+                  {colorOptions.map((color) => (
+                    <option key={color} value={color}>{color}</option>
+                  ))}
+                </select>
+              </div>
                 placeholder="กรอกชื่อสินค้า"
                 value={newProduct.name}
                 onChange={handleAddChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 required
-              />
+              
             </div>
 
             <div>

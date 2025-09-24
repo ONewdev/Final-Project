@@ -22,15 +22,15 @@ export function AuthProvider({ children }) {
       if (token && storedUser) {
         try {
           const userData = JSON.parse(storedUser);
-          const host = import.meta.env.VITE_HOST;
-          
+          let host = import.meta.env.VITE_HOST;
+          if (!host) host = window.location.origin.replace(/:\d+$/, ':3001');
           const response = await fetch(`${host}/api/customers/profile`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
-            }
+            },
+            credentials: 'include'
           });
-          
           if (response.ok) {
             const updatedUser = await response.json();
             setUser(updatedUser);

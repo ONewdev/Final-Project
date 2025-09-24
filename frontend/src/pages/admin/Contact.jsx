@@ -15,9 +15,7 @@ export default function ContactAdmin() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
 
-  // โหลดข้อมูลติดต่อเมื่อ component โหลด
   useEffect(() => {
     fetch(`${host}/api/contact`)
       .then((res) => res.json())
@@ -30,7 +28,7 @@ export default function ContactAdmin() {
         Swal.fire('ผิดพลาด', 'ไม่สามารถโหลดข้อมูลได้', 'error');
         setIsLoading(false);
       });
-  }, []);
+  }, [host]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -38,7 +36,6 @@ export default function ContactAdmin() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setIsSubmitting(true);
     try {
       const res = await fetch(`${host}/api/contact`, {
@@ -63,104 +60,110 @@ export default function ContactAdmin() {
 
   return (
     <div
-      style={{
-        fontFamily: "'Kanit', sans-serif",
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', // เขียว
-        color: '#333'
-      }}
-      className="d-flex align-items-center justify-content-center p-4"
+      style={{ fontFamily: "'Kanit', sans-serif" }}
+      className="min-h-screen w-full px-4 md:px-6 lg:px-8 py-10"
     >
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white rounded-4 shadow-lg p-5"
-        style={{ maxWidth: 600, width: '100%' }}
-      >
-        <h2 className="mb-4 fw-bold text-center" style={{ color: '#16a34a', letterSpacing: 1 }}>
+      {/* หัวข้อหน้า */}
+      <div className="max-w-3xl mx-auto mb-8">
+        <h1 className="text-3xl md:text-4xl font-bold text-green-700 tracking-wide">
           แก้ไขข้อมูลการติดต่อ
-        </h2>
+        </h1>
+        <p className="text-gray-600 mt-2">
+          ปรับปรุงที่อยู่ เบอร์โทร อีเมล เวลาเปิดทำการ และลิงก์แผนที่ของร้าน
+        </p>
+      </div>
 
-        <div className="mb-3">
-          <label className="form-label fw-semibold">ชื่อร้านค้า</label>
+      {/* ฟอร์มแบบไม่ใส่กล่อง */}
+      <form onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-6">
+        {/* ที่อยู่ / ชื่อร้าน */}
+        <div className="space-y-2">
+          <label className="block font-semibold text-gray-800">ที่อยู่ / รายละเอียดร้าน</label>
           <textarea
             name="address"
             value={formData.address}
             onChange={handleChange}
-            className="form-control rounded-3"
-            rows={2}
-            placeholder="ใส่ที่อยู่"
-          ></textarea>
-        </div>
-
-        <div className="mb-3">
-          <label className="form-label fw-semibold">เบอร์โทร</label>
-          <input
-            type="text"
-            name="phone"
-            value={formData.phone}
-            onChange={handleChange}
-            className="form-control rounded-3"
-            placeholder="0812345678"
+            rows={3}
+            className="w-full border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 rounded-md px-4 py-3 outline-none transition"
+            placeholder="ใส่ที่อยู่หรือรายละเอียดร้าน"
           />
         </div>
 
-        <div className="mb-3">
-          <label className="form-label fw-semibold">อีเมล</label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            className="form-control rounded-3"
-            placeholder="you@email.com"
-          />
+        {/* เบอร์โทร & อีเมล */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="block font-semibold text-gray-800">เบอร์โทร</label>
+            <input
+              type="text"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              className="w-full border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 rounded-md px-4 py-3 outline-none transition"
+              placeholder="0812345678"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="block font-semibold text-gray-800">อีเมล</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              className="w-full border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 rounded-md px-4 py-3 outline-none transition"
+              placeholder="you@email.com"
+            />
+          </div>
         </div>
 
-        <div className="mb-3">
-          <label className="form-label fw-semibold">เวลาเปิดทำการ</label>
+        {/* เวลาเปิดทำการ */}
+        <div className="space-y-2">
+          <label className="block font-semibold text-gray-800">เวลาเปิดทำการ</label>
           <input
             type="text"
             name="open_hours"
             value={formData.open_hours}
             onChange={handleChange}
-            className="form-control rounded-3"
+            className="w-full border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 rounded-md px-4 py-3 outline-none transition"
             placeholder="จันทร์ - ศุกร์ เวลา 08.00 - 17.00 น."
           />
         </div>
 
-        <div className="mb-3">
-          <label className="form-label fw-semibold">ลิงก์แผนที่ (Google Maps)</label>
+        {/* ลิงก์แผนที่ */}
+        <div className="space-y-2">
+          <label className="block font-semibold text-gray-800">ลิงก์แผนที่ (Google Maps)</label>
           <input
-            type="text"
+            type="url"
             name="map_url"
             value={formData.map_url}
             onChange={handleChange}
-            className="form-control rounded-3"
+            className="w-full border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 rounded-md px-4 py-3 outline-none transition"
             placeholder="https://goo.gl/maps/..."
           />
         </div>
 
-        <div className="mb-4">
-          <label className="form-label fw-semibold">สถานะ</label>
+        {/* สถานะ */}
+        <div className="space-y-2">
+          <label className="block font-semibold text-gray-800">สถานะ</label>
           <select
             name="status"
             value={formData.status || 'active'}
             onChange={handleChange}
-            className="form-control rounded-3"
+            className="w-full border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 rounded-md px-4 py-3 outline-none transition bg-white"
           >
             <option value="active">เปิดทำการ</option>
             <option value="inactive">ปิดทำการ</option>
           </select>
         </div>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="btn w-100 fw-bold"
-          style={{ background: '#16a34a', color: '#fff', fontSize: 18 }}
-        >
-          {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
-        </button>
+        {/* ปุ่มบันทึก */}
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full md:w-auto px-6 py-3 rounded-md font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition"
+          >
+            {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+          </button>
+        </div>
       </form>
     </div>
   );

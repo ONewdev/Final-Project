@@ -175,7 +175,7 @@ function OrdersShipped() {
 
                         {/* ปุ่มเฉพาะหน้า Shipped */}
                         <div className="flex gap-2 flex-wrap">
-                          {order.status === 'shipped' && (
+                          {order.status === 'shipped' && false && (
                             <>
                               <button
                                 className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
@@ -190,6 +190,14 @@ function OrdersShipped() {
                                 ดูรายละเอียด
                               </button>
                             </>
+                          )}
+                          {order.status === 'shipped' && (
+                            <button
+                              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                              onClick={() => navigate(`/users/order/${order.id}`)}
+                            >
+                              ดูรายละเอียด
+                            </button>
                           )}
                         </div>
                       </div>

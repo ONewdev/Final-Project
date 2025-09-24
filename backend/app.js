@@ -2,7 +2,6 @@
 try { require('dotenv').config(); } catch (err) { /* noop when dotenv is missing */ }
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const path = require('path');
 // const cookieParser = require('cookie-parser');
 
@@ -34,7 +33,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // app.use(cookieParser());
-app.use(bodyParser.json());
 
 // Serve static files (ภาพ) จาก public/uploads
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
@@ -45,8 +43,12 @@ app.get('/', (req, res) => {
 // app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 // Routes
+const colorsRouter = require('./routes/colors');
+const popularProductsRouter = require('./routes/popularProducts');
 app.use('/api', adminAuthRoutes);
 app.use('/api/customers', customersRouter);
+// Mount more specific route before the generic '/api/products'
+app.use('/api/products/popular', popularProductsRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/admin', adminRouter);
@@ -60,10 +62,11 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/messages', chatRoutes);
 app.use('/api/inbox', inboxRoutes);
 app.use('/api/custom', customOrderRoutes);
+app.use('/api/colors', colorsRouter);
 app.use('/api/reports', reportsRoutes);
 
 // Serve static files (ภาพ) จาก public/uploads
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+// (duplicate uploads static removed)
 // --- Socket.io ---
 const http = require('http');
 const { Server } = require('socket.io');

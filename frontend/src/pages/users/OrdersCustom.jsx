@@ -113,83 +113,72 @@ function OrdersCustom() {
           ยังไม่มีรายการสั่งทำ
         </div>
       ) : (
-        <div className="overflow-x-auto bg-white rounded-lg shadow">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">เลขที่</th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ประเภท</th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ขนาด</th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">สี</th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">จำนวน</th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ราคา</th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">สถานะ</th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่</th>
-                <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ดูรายละเอียด</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {orders.map(o => (
-                <tr key={o.id} className="hover:bg-gray-50">
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">#{o.id}</td>
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-700">{o.product_type || '-'}</td>
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-700">{o.width}x{o.height} {o.unit}</td>
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-700">{o.color || '-'}</td>
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-700">{o.quantity}</td>
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-700">฿{Number(o.price || 0).toLocaleString()}</td>
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${STATUS_CLASS[o.status] || 'bg-gray-100 text-gray-800'}`}> 
-                      {STATUS_TEXT[o.status] || o.status}
-                    </span>
-                  </td>
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap text-xs text-gray-500">
-                    {formatDateTimeTH(o.created_at)}
-                  </td>
-                  <td className="px-4 md:px-6 py-3 whitespace-nowrap">
-                    <button
-                      className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold"
-                      onClick={() => handleShowDetail(o.id)}
-                    >
-                      ดูรายละเอียด
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {orders.map(o => (
+            <div key={o.id} className="bg-white rounded-xl shadow p-6 flex flex-col justify-between hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-lg text-gray-800">#{o.id}</span>
+                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${STATUS_CLASS[o.status] || 'bg-gray-100 text-gray-800'}`}>{STATUS_TEXT[o.status] || o.status}</span>
+              </div>
+              <div className="mb-2"><span className="font-semibold">ประเภท:</span> {o.product_type || '-'}</div>
+              <div className="mb-2"><span className="font-semibold">ขนาด:</span> {o.width}x{o.height} {o.unit}</div>
+              <div className="mb-2"><span className="font-semibold">สี:</span> {o.color || '-'}</div>
+              <div className="mb-2"><span className="font-semibold">จำนวน:</span> {o.quantity}</div>
+              <div className="mb-2"><span className="font-semibold">ราคา:</span> <span className="text-blue-700 font-bold">฿{Number(o.price || 0).toLocaleString()}</span></div>
+              <div className="mb-2"><span className="font-semibold">วันที่สั่ง:</span> {formatDateTimeTH(o.created_at)}</div>
+              <div className="flex gap-2 mt-4">
+                {o.status === 'waiting_payment' && (
+                  <button
+                    className="px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-semibold"
+                    onClick={() => navigate(`/users/custom-order-payment/${o.id}`)}
+                  >
+                    ชำระเงิน
+                  </button>
+                )}
+                <button
+                  className="px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold"
+                  onClick={() => handleShowDetail(o.id)}
+                >
+                  ดูรายละเอียด
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
+
       {/* Modal แสดงรายละเอียดออเดอร์ */}
       {modalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-xl relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
+          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg relative animate-fadein">
             <button
               onClick={() => setModalOrder(null)}
-              className="absolute top-2 right-2 px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
+              className="absolute top-2 right-2 px-2 py-1 bg-gray-200 rounded-full hover:bg-gray-300 text-gray-700"
+              aria-label="ปิด"
             >
-              ปิด
+              ✕
             </button>
-            <h3 className="text-xl font-bold mb-4">รายละเอียดคำสั่งทำ #{modalOrder.id}</h3>
+            <h3 className="text-2xl font-bold mb-4 text-blue-700">รายละเอียดคำสั่งทำ #{modalOrder.id}</h3>
             {modalLoading ? (
               <div className="text-gray-500">กำลังโหลด...</div>
             ) : (
-              <>
-                <div className="mb-2">
+              <div className="space-y-3">
+                <div>
                   <span className="font-semibold">สถานะ: </span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CLASS[modalOrder.status] || 'bg-gray-100 text-gray-800'}`}>{STATUS_TEXT[modalOrder.status] || modalOrder.status}</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${STATUS_CLASS[modalOrder.status] || 'bg-gray-100 text-gray-800'}`}>{STATUS_TEXT[modalOrder.status] || modalOrder.status}</span>
                 </div>
-                <div className="mb-2"><span className="font-semibold">ประเภท:</span> {modalOrder.product_type}</div>
-                <div className="mb-2"><span className="font-semibold">ขนาด:</span> {modalOrder.width}x{modalOrder.height} {modalOrder.unit}</div>
-                <div className="mb-2"><span className="font-semibold">สี:</span> {modalOrder.color}</div>
-                <div className="mb-2"><span className="font-semibold">จำนวน:</span> {modalOrder.quantity}</div>
-                <div className="mb-2"><span className="font-semibold">ราคา:</span> ฿{Number(modalOrder.price || 0).toLocaleString()}</div>
-                <div className="mb-2"><span className="font-semibold">วันที่สั่ง:</span> {formatDateTimeTH(modalOrder.created_at)}</div>
+                <div><span className="font-semibold">ประเภท:</span> {modalOrder.product_type}</div>
+                <div><span className="font-semibold">ขนาด:</span> {modalOrder.width}x{modalOrder.height} {modalOrder.unit}</div>
+                <div><span className="font-semibold">สี:</span> {modalOrder.color}</div>
+                <div><span className="font-semibold">จำนวน:</span> {modalOrder.quantity}</div>
+                <div><span className="font-semibold">ราคา:</span> <span className="text-blue-700 font-bold">฿{Number(modalOrder.price || 0).toLocaleString()}</span></div>
+                <div><span className="font-semibold">วันที่สั่ง:</span> {formatDateTimeTH(modalOrder.created_at)}</div>
                 {modalOrder.details && (
-                  <div className="mb-2"><span className="font-semibold">รายละเอียดเพิ่มเติม:</span> {modalOrder.details}</div>
+                  <div><span className="font-semibold">รายละเอียดเพิ่มเติม:</span> {modalOrder.details}</div>
                 )}
                 {modalOrder.files && modalOrder.files.length > 0 && (
-                  <div className="mb-2">
+                  <div>
                     <span className="font-semibold">ไฟล์แนบ:</span>
                     <ul className="list-disc pl-6 mt-2">
                       {modalOrder.files.map(f => (
@@ -198,7 +187,7 @@ function OrdersCustom() {
                     </ul>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>

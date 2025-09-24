@@ -200,9 +200,19 @@ export default function ProductDetail() {
               {/* เนื้อหา */}
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="inline-block rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+                  <span className="inline-block rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 mr-2">
                     {product.category_name || '-'}
                   </span>
+                  {product.size && (
+                    <span className="inline-block rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 mr-2">
+                      ขนาด: {product.size}
+                    </span>
+                  )}
+                  {product.color && (
+                    <span className="inline-block rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700">
+                      สี: {product.color}
+                    </span>
+                  )}
                 </div>
 
                 <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight leading-tight mb-4">

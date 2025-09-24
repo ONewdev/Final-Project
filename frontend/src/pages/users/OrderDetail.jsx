@@ -131,7 +131,7 @@ function OrderDetail() {
   };
 
   const canPay = order?.status === 'pending';
-  const canConfirmReceive = order?.status === 'shipped';
+  const canConfirmReceive = order?.status === 'shipped' && !!order?.delivery_tracking_number;
   const canDownloadReceipt = order?.status === 'delivered';
 
   const items = useMemo(() => Array.isArray(order?.items) ? order.items : [], [order]);

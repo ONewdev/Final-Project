@@ -76,7 +76,7 @@ export default function Navbar() {
     };
   }, [user]);
 
-  // การแจ้งเตือน
+  // การแจ้งเตือน (ดึงจำนวน unread เป็นระยะ)
   useEffect(() => {
     if (!user || !user.id) {
       setNotificationCount(0);
@@ -100,7 +100,8 @@ export default function Navbar() {
       } catch {}
     };
     fetchUnread();
-    const onUpdated = () => fetchUnread();
+    // เพิ่ม delay 200ms เพื่อรอ backend mark_read ก่อนรีเฟรช badge
+    const onUpdated = () => setTimeout(fetchUnread, 200);
     window.addEventListener('notificationsUpdated', onUpdated);
     window.addEventListener('userChanged', fetchUnread);
     const t = setInterval(fetchUnread, 30000);
@@ -111,6 +112,34 @@ export default function Navbar() {
       clearInterval(t);
     };
   }, [host, user?.id]);
+
+  // === NEW: คลิกกระดิ่งแล้วให้ badge หายทันที + ไปหน้าแจ้งเตือน + บอก backend ให้ mark_read ===
+  const handleBellClick = async () => {
+    if (!user?.id) {
+      navigate('/login');
+      return;
+    }
+
+    // 1) Optimistic clear badge
+    setNotificationCount(0);
+    try { localStorage.setItem('notif_count', '0'); } catch {}
+    window.dispatchEvent(new Event('notificationsUpdated'));
+
+    // 2) ไปหน้าแจ้งเตือน
+    navigate('/users/notifications');
+
+    // 3) ยิง API mark_read (กันเคสผู้ใช้ย้อนกลับเร็ว ๆ)
+    try {
+      await fetch(`${host}/api/notifications/mark_read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ customer_id: user.id }),
+      });
+    } catch (e) {
+      // ปกติไม่ต้อง rollback เพราะหน้า Notifications.jsx ก็ mark_read ซ้ำให้อยู่แล้ว
+    }
+  };
 
   return (
     <header
@@ -224,13 +253,13 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Notifications */}
+            {/* Notifications (Desktop) */}
             {user && (
               <button
                 className="p-2 rounded-full hover:bg-gray-100 transition relative"
                 title="การแจ้งเตือน"
                 aria-label="การแจ้งเตือน"
-                onClick={() => navigate('/users/notifications')}
+                onClick={handleBellClick}
               >
                 <Bell className="w-7 h-7 text-green-700" />
                 {notificationCount > 0 && (
@@ -284,6 +313,8 @@ export default function Navbar() {
                       onClick={() => {
                         localStorage.removeItem('user');
                         localStorage.removeItem('token');
+                        // ล้าง badge ที่ cache ไว้ด้วย (กันค้าง)
+                        try { localStorage.setItem('notif_count', '0'); } catch {}
                         setUser(null);
                         setProfileOpen(false);
                         Swal.fire({
@@ -294,6 +325,7 @@ export default function Navbar() {
                           confirmButtonColor: '#16a34a',
                         }).then(() => {
                           window.dispatchEvent(new Event('userChanged'));
+                          window.dispatchEvent(new Event('notificationsUpdated'));
                           navigate('/home', { replace: true });
                         });
                       }}
@@ -351,7 +383,7 @@ export default function Navbar() {
                       aria-label="การแจ้งเตือน"
                       onClick={() => {
                         setIsMenuOpen(false);
-                        navigate('/users/notifications');
+                        handleBellClick();
                       }}
                     >
                       <Bell className="w-7 h-7 text-green-700" />
@@ -424,6 +456,7 @@ export default function Navbar() {
                           onClick={() => {
                             localStorage.removeItem('user');
                             localStorage.removeItem('token');
+                            try { localStorage.setItem('notif_count', '0'); } catch {}
                             setUser(null);
                             setIsMenuOpen(false);
                             Swal.fire({
@@ -434,6 +467,7 @@ export default function Navbar() {
                               confirmButtonColor: '#16a34a',
                             }).then(() => {
                               window.dispatchEvent(new Event('userChanged'));
+                              window.dispatchEvent(new Event('notificationsUpdated'));
                               navigate('/home', { replace: true });
                             });
                           }}
@@ -474,4 +508,3 @@ export default function Navbar() {
     </header>
   );
 }
-

@@ -7,6 +7,19 @@ export default function PopularProducts() {
   const host = import.meta.env.VITE_HOST;
   const navigate = useNavigate();
 
+  const PLACEHOLDER_IMG = 'https://via.placeholder.com/128?text=No+Image';
+
+  const resolveImageUrl = (url) => {
+    if (!url) return PLACEHOLDER_IMG;
+    if (/^https?:\/\//i.test(url)) return url; // already absolute
+    if (host) {
+      const base = host.endsWith('/') ? host.slice(0, -1) : host;
+      const path = url.startsWith('/') ? url : `/${url}`;
+      return `${base}${path}`;
+    }
+    return url; // fallback: may work if same-origin
+  };
+
   useEffect(() => {
     async function fetchPopular() {
       try {
@@ -22,7 +35,8 @@ export default function PopularProducts() {
             ? data.filter(p => (p.avg_rating ?? 0) > 0)
             : [];
           filtered.sort((a, b) => (b.avg_rating ?? 0) - (a.avg_rating ?? 0));
-          setProducts(filtered);
+          // จำกัดให้โชว์ 3 อัน
+          setProducts(filtered.slice(0, 3));
         }
       } catch (err) {
         setProducts([]);
@@ -43,7 +57,12 @@ export default function PopularProducts() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
           {products.map(product => (
             <div key={product.id} className="bg-gray-50 rounded-xl shadow p-4 flex flex-col items-center">
-              <img src={product.image_url} alt={product.name} className="w-32 h-32 object-cover rounded-lg mb-3" />
+              <img
+                src={resolveImageUrl(product.image_url)}
+                alt={product.name}
+                className="w-32 h-32 object-cover rounded-lg mb-3"
+                onError={(e) => { e.currentTarget.src = PLACEHOLDER_IMG; }}
+              />
               <h3 className="font-semibold text-lg mb-1 text-green-800">{product.name}</h3>
               <div className="flex items-center mb-2">
                 <span className="text-yellow-400 mr-1">★</span>

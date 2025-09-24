@@ -322,15 +322,17 @@ function Orders() {
                               </button>
                             </>
                           )}
-                          {/* ปุ่มยืนยันรับสินค้า เฉพาะสถานะ shipped */}
+                          {/* ปุ่มยืนยันรับสินค้า เฉพาะสถานะ shipped และต้องมีเลขพัสดุ (หรือเงื่อนไขที่ต้องการ) */}
                           {order.status === 'shipped' && (
                             <>
-                              <button
-                                className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
-                                onClick={() => handleConfirmOrder(order.id)}
-                              >
-                                ยืนยันรับสินค้า
-                              </button>
+                              {order.delivery_tracking_number ? (
+                                <button
+                                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
+                                  onClick={() => handleConfirmOrder(order.id)}
+                                >
+                                  ยืนยันรับสินค้า
+                                </button>
+                              ) : null}
                               <button
                                 className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
                                 onClick={() => navigate(`/users/order/${order.id}`)}

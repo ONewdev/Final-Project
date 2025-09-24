@@ -1,25 +1,46 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import DataTable from 'react-data-table-component';
 import Swal from 'sweetalert2';
 
 const host = import.meta.env.VITE_HOST || '';
+
+const statusMapping = {
+  pending: 'รอดำเนินการ',
+  approved: 'อนุมัติ',
+  rejected: 'ไม่อนุมัติ',
+  waiting_payment: 'รอชำระเงิน',
+  paid: 'ชำระเงินแล้ว',
+  in_production: 'กำลังผลิต',
+  delivering: 'กำลังจัดส่ง',
+  finished: 'เสร็จสิ้น',
+};
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800',
   approved: 'bg-blue-100 text-blue-800',
   rejected: 'bg-red-100 text-red-800',
+  waiting_payment: 'bg-amber-100 text-amber-800',
+  paid: 'bg-emerald-100 text-emerald-800',
+  in_production: 'bg-purple-100 text-purple-800',
+  delivering: 'bg-sky-100 text-sky-800',
   finished: 'bg-green-100 text-green-800',
 };
 
-const statusText = {
-  pending: 'รอดำเนินการ',
-  approved: 'อนุมัติ',
-  rejected: 'ไม่อนุมัติ',
-  finished: 'เสร็จสิ้น',
+const nextStatus = {
+  pending: ['approved','rejected','waiting_payment'],
+  waiting_payment: ['paid','rejected'],
+  paid: ['in_production','rejected'],
+  approved: ['in_production','rejected'],
+  in_production: ['delivering','rejected'],
+  delivering: ['finished'],
+  finished: [],
+  rejected: []
 };
 
-function Custom_Orders() {
+function OrdersCustom() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
     fetch(`${host}/api/custom/orders`)
@@ -43,7 +64,7 @@ function Custom_Orders() {
     try {
       const result = await Swal.fire({
         title: 'ยืนยันการเปลี่ยนสถานะ',
-        text: `ต้องการเปลี่ยนสถานะเป็น "${statusText[status]}" ใช่หรือไม่?`,
+        text: `ต้องการเปลี่ยนสถานะเป็น "${statusMapping[status] || status}" ใช่หรือไม่?`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
@@ -61,7 +82,9 @@ function Custom_Orders() {
 
         if (!response.ok) throw new Error('Failed to update status');
 
-        setOrders(orders => orders.map(o => o.id === id ? { ...o, status } : o));
+        // reflect backend mapping: approved -> waiting_payment
+        const mapped = status === 'approved' ? 'waiting_payment' : status;
+        setOrders(orders => orders.map(o => o.id === id ? { ...o, status: mapped } : o));
         
         Swal.fire({
           icon: 'success',
@@ -80,6 +103,47 @@ function Custom_Orders() {
     }
   };
 
+  const filteredOrders = useMemo(() => {
+    if (filterStatus === 'all') return orders;
+    return orders.filter((o) => o.status === filterStatus);
+  }, [orders, filterStatus]);
+
+  const columns = useMemo(
+    () => [
+      { name: '#', cell: (row, idx) => idx + 1, width: '60px' },
+      { name: 'ลูกค้า', selector: (row) => row.user_id },
+      { name: 'ประเภท', selector: (row) => row.product_type },
+      { name: 'ขนาด', selector: (row) => `${row.width}x${row.height} ${row.unit}` },
+      { name: 'สี', selector: (row) => row.color },
+      { name: 'จำนวน', selector: (row) => row.quantity },
+      { name: 'ราคา', selector: (row) => `฿${Number(row.price).toLocaleString()}` },
+      {
+        name: 'สถานะ',
+        cell: (row) => (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[row.status] || 'bg-gray-100 text-gray-800'}`}>
+            {statusMapping[row.status] || row.status}
+          </span>
+        ),
+      },
+      {
+        name: 'จัดการ',
+        cell: (row) => (
+          <select
+            value={row.status}
+            onChange={e => updateStatus(row.id, e.target.value)}
+            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+          >
+            <option value={row.status}>{statusMapping[row.status] || row.status}</option>
+            {nextStatus[row.status]?.map((value) => (
+              <option key={value} value={value}>{statusMapping[value] || value}</option>
+            ))}
+          </select>
+        ),
+      },
+    ],
+    []
+  );
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
@@ -87,66 +151,38 @@ function Custom_Orders() {
   );
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">รายการสั่งทำสินค้า</h2>
-        <div className="text-sm text-gray-500">
-          ทั้งหมด {orders.length} รายการ
-        </div>
+    <div className="container mx-auto mt-8 pl-24">
+      <h2 className="text-2xl font-bold mb-6">รายการสั่งทำสินค้า</h2>
+
+      <div className="mb-4">
+        <label className="mr-2">กรองตามสถานะ:</label>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="border rounded p-1"
+        >
+          <option value="all">ทั้งหมด</option>
+          {Object.entries(statusMapping).map(([key, value]) => (
+            <option key={key} value={key}>
+              {value}
+            </option>
+          ))}
+        </select>
       </div>
-      
-      <div className="overflow-x-auto bg-white rounded-lg shadow">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รหัส</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ลูกค้า</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ประเภท</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ขนาด</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สี</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จำนวน</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ราคา</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {orders.map(order => (
-              <tr key={order.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.user_id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.product_type}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {order.width}x{order.height} {order.unit}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.color}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.quantity}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  ฿{Number(order.price).toLocaleString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[order.status]}`}>
-                    {statusText[order.status]}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <select
-                    value={order.status}
-                    onChange={e => updateStatus(order.id, e.target.value)}
-                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                  >
-                    {Object.entries(statusText).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      {filteredOrders.length > 0 ? (
+        <DataTable
+          columns={columns}
+          data={filteredOrders}
+          pagination
+          highlightOnHover
+          pointerOnHover
+        />
+      ) : (
+        <p className="text-gray-500">ไม่พบรายการสั่งทำ</p>
+      )}
     </div>
   );
 }
 
-export default Custom_Orders;
+export default OrdersCustom;

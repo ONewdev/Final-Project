@@ -17,6 +17,7 @@ import OrdersCustom from '../pages/users/OrdersCustom';
 
 // ✅ เพิ่ม import หน้านี้
 import OrderDetail from '../pages/users/OrderDetail';
+import CustomOrderPayment from '../pages/users/CustomOrderPayment';
 
 export default function UsersRoutes() {
   return (
@@ -42,6 +43,7 @@ export default function UsersRoutes() {
         <Route path="payments" element={<Payments />} />
         <Route path="cart" element={<Cart />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="custom-order-payment/:id" element={<CustomOrderPayment />} />
       </Route>
     </Routes>
   );

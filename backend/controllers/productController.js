@@ -41,7 +41,9 @@ const getAllProducts = async (req, res) => {
         'products.image_url',
         'products.status',
         'products.created_at',
-        'products.updated_at'
+        'products.updated_at',
+        'products.size',
+        'products.color'
       );
 
     // ✅ เพิ่มเงื่อนไข filter หมวดหมู่ ถ้ามี
@@ -67,7 +69,7 @@ const getAllProducts = async (req, res) => {
 // 2. Add new product (พร้อมรูป)
 const addProduct = async (req, res) => {
   try {
-    const { product_code, name, description, category_id, price, quantity, status } = req.body;
+    const { product_code, name, description, category_id, price, quantity, status, size, color } = req.body;
     const imageUrl = req.file ? `/uploads/products/${req.file.filename}` : null;
 
     const newProduct = {
@@ -79,6 +81,8 @@ const addProduct = async (req, res) => {
       quantity,
       status,
       image_url: imageUrl,
+      size,
+      color,
     };
 
     // For MySQL/SQLite, this returns an array with the new ID, e.g., [123]
@@ -91,18 +95,20 @@ const addProduct = async (req, res) => {
 
     const newlyAddedProduct = await db('products')
         .leftJoin('category', 'products.category_id', 'category.category_id')
-        .select(
-            'products.id',
-            'products.product_code',
-            'products.name',
-            'products.description',
-            'products.category_id',
-            'category.category_name as category_name',
-            'products.price',
-            'products.quantity',
-            'products.image_url',
-            'products.status'
-        )
+    .select(
+      'products.id',
+      'products.product_code',
+      'products.name',
+      'products.description',
+      'products.category_id',
+      'category.category_name as category_name',
+      'products.price',
+      'products.quantity',
+      'products.image_url',
+      'products.status',
+      'products.size',
+      'products.color'
+    )
         // Correctly use the ID variable here
         .where('products.id', insertedProductId)
         .first();
@@ -126,7 +132,7 @@ const addProduct = async (req, res) => {
 
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-  const { product_code, name, description, category_id, price, quantity, status } = req.body;
+  const { product_code, name, description, category_id, price, quantity, status, size, color } = req.body;
   console.log(req.file); // ตรวจสอบว่ามีไฟล์อัปโหลดหรือไม่
 
   try {
@@ -141,7 +147,9 @@ const updateProduct = async (req, res) => {
       price,
       quantity,
       status,
-      updated_at: db.fn.now()
+       updated_at: db.fn.now(),
+       size,
+       color
     };
 
     // ถ้ามีการอัปโหลดรูปใหม่ (req.file)
@@ -165,6 +173,8 @@ const updateProduct = async (req, res) => {
         'products.quantity',
         'products.image_url',
         'products.status',
+        'products.size',
+        'products.color',
         'products.created_at',
         'products.updated_at'
       )
@@ -212,6 +222,8 @@ const getProductById = async (req, res) => {
         'products.quantity',
         'products.image_url',
         'products.status',
+        'products.size',
+        'products.color',
         'products.created_at',
         'products.updated_at'
       )
@@ -229,11 +241,68 @@ const getProductById = async (req, res) => {
   }
 };
 
+// Get popular products by calculating average rating from product_ratings
+// Returns top 8 products with avg_rating > 0 (if any)
+const getPopularProducts = async (req, res) => {
+  try {
+    const rows = await db('products as p')
+      .leftJoin('product_ratings as r', 'p.id', 'r.product_id')
+      .leftJoin('category as c', 'p.category_id', 'c.category_id')
+      .groupBy(
+        'p.id',
+        'p.product_code',
+        'p.name',
+        'p.description',
+        'p.category_id',
+        'c.category_name',
+        'p.price',
+        'p.quantity',
+        'p.image_url',
+        'p.status',
+        'p.size',
+        'p.color'
+      )
+      .select(
+        'p.id',
+        'p.product_code',
+        'p.name',
+        'p.description',
+        'p.category_id',
+        db.raw('c.category_name as category_name'),
+        'p.price',
+        'p.quantity',
+        'p.image_url',
+        'p.status',
+        'p.size',
+        'p.color',
+        db.raw('COALESCE(AVG(r.rating), 0) as avg_rating'),
+        db.raw('COUNT(r.id) as rating_count')
+      )
+      // If you only want active products, uncomment the next line
+      // .where('p.status', 'active')
+      .orderBy([{ column: 'avg_rating', order: 'desc' }, { column: 'rating_count', order: 'desc' }])
+      .limit(8);
+
+    // Ensure numeric fields are numbers in JSON
+    const products = rows.map(r => ({
+      ...r,
+      avg_rating: Number(r.avg_rating) || 0,
+      rating_count: Number(r.rating_count) || 0,
+    }));
+
+    res.json(products);
+  } catch (err) {
+    console.error('Error fetching popular products:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   uploadProductImage,
   getAllProducts,
   addProduct,
   updateProduct,
   updateProductStatus,
-  getProductById
+  getProductById,
+  getPopularProducts
 };

@@ -553,18 +553,19 @@ exports.generateReceiptPdf = async (req, res) => {
       .text(`วันที่: ${fmtDateTH(order.created_at)}`, { align: 'right' });
     doc.moveDown(0.8);
 
+    // Ensure all key info is present, fallback to '-'
     const leftLines = [
-      customer?.name ? `ชื่อลูกค้า: ${customer.name}` : `ชื่อลูกค้า: -`,
-      customer?.phone ? `โทร: ${customer.phone}` : null,
-      customer?.email ? `อีเมล: ${customer.email}` : null,
-      (order.shipping_address || customer?.address) ? `ที่อยู่: ${order.shipping_address || customer?.address}` : null,
-    ].filter(Boolean);
+      `ชื่อลูกค้า: ${customer?.name || '-'}`,
+      `โทร: ${customer?.phone || '-'}`,
+      `อีเมล: ${customer?.email || '-'}`,
+      `ที่อยู่: ${order.shipping_address || customer?.address || '-'}`,
+    ];
 
     const rightLines = [
-      `ออเดอร์: #${order.id}`,
+      `เลขที่ออเดอร์: #${order.id || '-'}`,
       `สถานะ: ${order.status || '-'}`,
-      order.payment_method ? `ชำระเงิน: ${order.payment_method}` : `ชำระเงิน: -`,
-      order.paid_at ? `ชำระเมื่อ: ${fmtDateTH(order.paid_at)}` : `ชำระเมื่อ: -`,
+      `วิธีชำระเงิน: ${order.payment_method || '-'}`,
+      `วันที่ชำระเงิน: ${order.paid_at ? fmtDateTH(order.paid_at) : '-'}`,
     ];
     drawInfoBox(doc, 'ข้อมูลลูกค้า', leftLines, 'ข้อมูลคำสั่งซื้อ', rightLines);
 

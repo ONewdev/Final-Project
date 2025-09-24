@@ -145,12 +145,14 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(400).json({ message: 'invalid status' });
     }
     // map FE->DB
-    const target = (status === 'finished') ? 'completed' : status;
+    let target = (status === 'finished') ? 'completed' : status;
+    // map admin "approved" action into waiting_payment step so user is prompted to pay
+    if (target === 'approved') target = 'waiting_payment';
     if (!ALLOWED.has(target)) return res.status(400).json({ message: 'invalid status' });
 
-    const current = await db('custom_orders').where({ id }).first('status');
+    // fetch current status and user for notifications
+    const current = await db('custom_orders').where({ id }).first('status', 'user_id');
     if (!current) return res.status(404).json({ message: 'custom order not found' });
-
     // ตรวจเส้นทาง
     if (!NEXT[current.status]?.includes(target)) {
       return res.status(409).json({ message: `cannot change status from ${current.status} to ${target}` });
@@ -161,16 +163,31 @@ exports.updateOrderStatus = async (req, res) => {
         .where({ id })
         .update({ status: target, updated_at: trx.fn.now() });
 
-      // log การเปลี่ยนสถานะ
-      await trx('custom_order_status_logs').insert({
-        order_id: id,
-        from_status: current.status,
-        to_status: target,
-        changed_at: trx.fn.now()
-      });
+      // log การเปลี่ยนสถานะ (ไม่ให้ล้มทั้งระบบหากตารางหาย)
+      try {
+        await trx('custom_order_status_logs').insert({
+          order_id: id,
+          from_status: current.status,
+          to_status: target,
+          changed_at: trx.fn.now()
+        });
+      } catch (logErr) {
+        console.warn('custom_order_status_logs insert failed, continuing. Error:', logErr && logErr.message ? logErr.message : logErr);
+      }
 
-      // (ออปชั่น) แจ้งเตือนลูกค้า
-      // await trx('notifications').insert({ ... })
+      // เมื่อตั้งเป็น waiting_payment ให้แจ้งลูกค้าไปชำระเงิน
+      if (target === 'waiting_payment') {
+        try {
+          await trx('notifications').insert({
+            customer_id: current.user_id,
+            type: 'info',
+            title: 'กรุณาชำระเงิน',
+            message: `ออเดอร์ #${id} ได้รับการอนุมัติ กรุณาชำระเงินเพื่อดำเนินการต่อ`
+          });
+        } catch (notifErr) {
+          console.warn('notifications insert failed (non-fatal). Error:', notifErr && notifErr.message ? notifErr.message : notifErr);
+        }
+      }
     });
 
     return res.json({ success: true });

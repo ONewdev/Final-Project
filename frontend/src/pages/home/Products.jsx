@@ -580,6 +580,11 @@ function Products() {
                         <span className="inline-block rounded-full border border-green-200 bg-green-50 px-2.5 py-1 font-medium text-green-700">
                           {product.category_name || product.category || "-"}
                         </span>
+                        {product.color && (
+                          <span className="inline-block rounded-full border border-gray-300 bg-gray-50 px-2 py-1 font-medium text-gray-700">
+                            สี: {product.color}
+                          </span>
+                        )}
                         {/* จำนวนสินค้าคงเหลือ */}
                         <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${product.quantity <= 5 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
                           คงเหลือ {product.quantity} ชิ้น
@@ -821,8 +826,7 @@ function Products() {
         )}
       </div>
 
-      {/* ปุ่มเลื่อนขึ้น (แก้ bottom-25 → bottom-[25px]) */}
-      <div className="fixed bottom-[25px] right-6 z-10 flex flex-col items-end gap-4">
+      <div className="fixed bottom-[25px] right-6 z-10 flex flex-col items-end gap-">
         {showScrollTop && (
           <button
             onClick={scrollToTop}

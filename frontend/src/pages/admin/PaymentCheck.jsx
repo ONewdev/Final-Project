@@ -7,6 +7,9 @@ export default function PaymentCheck() {
   const host = import.meta.env.VITE_HOST;
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  // custom order payments
+  const [customPayments, setCustomPayments] = useState([]);
+  const [customLoading, setCustomLoading] = useState(true);
 
   // Preview payment slip image in a SweetAlert modal
   const handlePreview = (imageName) => {
@@ -47,6 +50,71 @@ export default function PaymentCheck() {
         console.error(err);
       });
   }, [host]);
+
+  // Load pending custom-order payment slips (no backend changes)
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCustom() {
+      try {
+        const resOrders = await fetch(`${host}/api/custom/orders`);
+        if (!resOrders.ok) throw new Error('cannot list custom orders');
+        const allOrders = await resOrders.json();
+        const waiting = (Array.isArray(allOrders) ? allOrders : []).filter(o => o.status === 'waiting_payment');
+        const lists = await Promise.all(waiting.map(async (o) => {
+          try {
+            const r = await fetch(`${host}/api/custom/orders/${o.id}/payments`);
+            if (!r.ok) return [];
+            const rows = await r.json();
+            return (rows || []).filter(p => p.status === 'pending').map(p => ({ ...p, order_id: o.id }));
+          } catch {
+            return [];
+          }
+        }));
+        const merged = lists.flat();
+        if (!cancelled) setCustomPayments(merged);
+      } catch (e) {
+        if (!cancelled) setCustomPayments([]);
+        console.error('load custom payments failed:', e);
+      } finally {
+        if (!cancelled) setCustomLoading(false);
+      }
+    }
+    loadCustom();
+    return () => { cancelled = true; };
+  }, [host]);
+
+  const handlePreviewCustom = (imagePath) => {
+    if (!imagePath) return;
+    const url = imagePath.startsWith('/') ? `${host}${imagePath}` : `${host}/uploads/custom_payments/${imagePath}`;
+    Swal.fire({
+      imageUrl: url,
+      imageAlt: 'สลิปชำระเงิน (สั่งทำ)',
+      showConfirmButton: false,
+      showCloseButton: true,
+      background: '#000',
+      width: 'auto',
+      padding: 0,
+    });
+  };
+
+  const handleApproveCustom = async (paymentId) => {
+    const result = await Swal.fire({
+      title: 'ยืนยันอนุมัติสลิปสั่งทำนี้หรือไม่?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'อนุมัติ',
+      cancelButtonText: 'ยกเลิก',
+    });
+    if (!result.isConfirmed) return;
+    try {
+      const res = await fetch(`${host}/api/custom/payments/${paymentId}/approve`, { method: 'PUT' });
+      if (!res.ok) throw new Error('approve failed');
+      setCustomPayments(prev => prev.filter(p => p.id !== paymentId));
+      Swal.fire('สำเร็จ', 'อนุมัติสลิปสั่งทำแล้ว', 'success');
+    } catch (e) {
+      Swal.fire('ผิดพลาด', 'ไม่สามารถอนุมัติรายการนี้ได้', 'error');
+    }
+  };
 
   // ฟังก์ชันอนุมัติการชำระเงิน
 const handleApprove = async (paymentId) => {
@@ -127,6 +195,55 @@ const handleApprove = async (paymentId) => {
                     onClick={() => handleApprove(payment.id)}
                     className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs"
                   >อนุมัติ</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="h-8" />
+      <h2 className="text-xl font-bold mb-2">สลิปสั่งทำ (รอตรวจสอบ)</h2>
+      {customLoading ? (
+        <div>กำลังโหลด...</div>
+      ) : customPayments.length === 0 ? (
+        <div className="text-gray-500">ไม่มีสลิปสั่งทำที่รออนุมัติ</div>
+      ) : (
+        <table className="w-full border text-sm">
+          <thead>
+            <tr className="bg-gray-200">
+              <th className="border px-4 py-2">#</th>
+              <th className="border px-4 py-2">Order ID</th>
+              <th className="border px-4 py-2">Customer ID</th>
+              <th className="border px-4 py-2">ยอด</th>
+              <th className="border px-4 py-2">สลิป</th>
+              <th className="border px-4 py-2">วันที่</th>
+              <th className="border px-4 py-2">สถานะ</th>
+              <th className="border px-4 py-2">ตรวจสอบ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {customPayments.map((p, idx) => (
+              <tr key={p.id}>
+                <td className="border px-4 py-2 text-center">{idx + 1}</td>
+                <td className="border px-4 py-2">#{p.order_id}</td>
+                <td className="border px-4 py-2">{p.customer_id}</td>
+                <td className="border px-4 py-2">{p.amount !== undefined && p.amount !== null && !isNaN(Number(p.amount)) ? `฿${Number(p.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '-'}</td>
+                <td className="border px-4 py-2">
+                  {p.image ? (
+                    <button type="button" onClick={() => handlePreviewCustom(p.image)} className="focus:outline-none" title="ดูสลิป">
+                      <img src={(p.image && p.image.startsWith('/')) ? `${host}${p.image}` : `${host}/uploads/custom_payments/${p.image}`} alt="สลิป" className="h-12 rounded cursor-zoom-in" />
+                    </button>
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
+                </td>
+                <td className="border px-4 py-2">{p.created_at ? new Date(p.created_at).toLocaleDateString('th-TH') : '-'}</td>
+                <td className="border px-4 py-2">
+                  <span className="px-2 py-1 rounded text-sm font-medium bg-yellow-100 text-yellow-600">{p.status}</span>
+                </td>
+                <td className="border px-4 py-2">
+                  <button onClick={() => handleApproveCustom(p.id)} className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">อนุมัติ</button>
                 </td>
               </tr>
             ))}

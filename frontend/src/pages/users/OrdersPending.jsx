@@ -14,6 +14,7 @@ function OrdersPending() {
   const getStatusText = (status) => {
     const statusMap = {
       pending: 'รอการยืนยัน/ชำระเงิน',
+      waiting_payment: 'รอการชำระเงิน',
       confirmed: 'ยืนยันแล้ว',
       processing: 'กำลังดำเนินการ',
       shipped: 'จัดส่งแล้ว',
@@ -26,6 +27,7 @@ function OrdersPending() {
   const getStatusColor = (status) => {
     const colorMap = {
       pending: 'bg-yellow-100 text-yellow-800',
+      waiting_payment: 'bg-yellow-100 text-yellow-800',
       confirmed: 'bg-blue-100 text-blue-800',
       processing: 'bg-purple-100 text-purple-800',
       shipped: 'bg-amber-100 text-amber-800',
@@ -208,8 +210,8 @@ function OrdersPending() {
 
                         {/* ปุ่มเฉพาะหน้า Pending */}
                         <div className="flex gap-2 flex-wrap">
-                          {/* ปุ่มชำระเงิน เฉพาะสถานะ pending เท่านั้น */}
-                          {order.status === 'pending' && (
+                          {/* ปุ่มชำระเงิน เฉพาะสถานะ pending หรือ waiting_payment */}
+                          {(order.status === 'pending' || order.status === 'waiting_payment') && (
                             <>
                               <button
                                 className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
