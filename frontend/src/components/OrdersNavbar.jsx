@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 const navItems = [
   { label: 'ทั้งหมด', path: '/users/orders' },
   { label: 'รอดำเนินการ', path: '/users/pending' },
+  { label: 'กำลังเตรียมสินค้า', path: '/users/processing' },
   { label: 'กำลังจัดส่ง', path: '/users/shipped' },
   { label: 'จัดส่งสำเร็จ', path: '/users/delivered' },
   { label: 'ยกเลิก', path: '/users/cancelled' },

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Phone, Mail, Clock, Send } from 'lucide-react';
+import { Store } from 'lucide-react';
 import { sendMessage } from '../../services/chatService';
 
 // Mock components - replace with your actual components
@@ -189,11 +190,25 @@ function Contact() {
               <div className="bg-white rounded-lg shadow-lg p-8">
                 <h2 className="text-2xl font-bold text-green-800 mb-6">ข้อมูลติดต่อ</h2>
                 <div className="space-y-6">
+
                   <div className="flex items-start space-x-4 mt-5">
+                    <Store className="text-green-600 mt-1" size={24} />
+                    <div>
+                      <h3 className="font-semibold text-green-800">ชื่อร้าน</h3>
+                      <p className="text-green-700 ">
+                        {contactInfo?.name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-4 mt-5">
+
                     <MapPin className="text-green-600 mt-1" size={24} />
                     <div>
                       <h3 className="font-semibold text-green-800">ที่อยู่</h3>
-                      <p className="text-green-700">{contactInfo?.address || '123 ถนนธุรกิจ แขวงลุมพินี\nเขตปทุมวัน กรุงเทพมหานคร 10330'}</p>
+                      <p className="text-green-700">
+                        {contactInfo?.address || '123 ถนนธุรกิจ แขวงลุมพินี\nเขตปทุมวัน กรุงเทพมหานคร 10330'}
+                      </p>
                     </div>
                   </div>
 
@@ -223,7 +238,7 @@ function Contact() {
                       </p>
                     </div>
                   </div>
-                  
+
                 </div>
               </div>
 

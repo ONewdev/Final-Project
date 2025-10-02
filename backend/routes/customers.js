@@ -3,6 +3,9 @@ const router = express.Router();
 const customerController = require('../controllers/customerController');
 const { authenticateCustomer } = require('../middlewares/customerAuth');
 
+// [ADD] controller ที่อยู่
+const addressCtrl = require('../controllers/customerAddressController');
+
 // ------- Authenticated (ลูกค้า) -------
 router.get('/me', authenticateCustomer, (req, res) => {
   res.json({ success: true, user: req.customer });
@@ -33,12 +36,17 @@ router.get('/provinces', customerController.getProvinces);
 router.get('/districts', customerController.getDistricts);
 router.get('/subdistricts', customerController.getSubdistricts);
 
+// ===== [ADD] ที่อยู่ของลูกค้า (ล็อกอิน และต้องเป็นเจ้าของข้อมูล) =====
+router.get('/:id/addresses', authenticateCustomer, addressCtrl.list);
+router.post('/:id/addresses', authenticateCustomer, addressCtrl.create);
+router.put('/:id/addresses/:addrId', authenticateCustomer, addressCtrl.update);
+router.delete('/:id/addresses/:addrId', authenticateCustomer, addressCtrl.remove);
+router.patch('/:id/addresses/:addrId/default', authenticateCustomer, addressCtrl.setDefault);
+
 // ------- Public/ทั่วไป -------
 router.get('/', customerController.getAllCustomers);
 
-// ------- Auth ลูกค้า (วางไว้ก่อนทุกเส้นทางที่มี :id) -------
-// ถ้าจะให้ path อยู่ใต้ /api/customers ก็จะเป็น /api/customers/verify-email เป็นต้น
-// แนะนำให้แยกไปที่ /api/auth ในไฟล์ router อื่น แต่ถ้าจะอยู่ที่นี่ก็ได้
+// ------- Auth ลูกค้า -------
 router.get('/verify-email', customerController.verifyEmail);
 router.post('/forgot-password', customerController.forgotPassword);
 router.get('/verify-reset-token', customerController.verifyResetToken);

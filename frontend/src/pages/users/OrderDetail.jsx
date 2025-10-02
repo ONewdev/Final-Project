@@ -53,10 +53,29 @@ function OrderDetail() {
     if (!maybePath) return '';
     const str = String(maybePath);
     if (/^https?:\/\//i.test(str)) return str;
-    // ทำให้เป็น relative/absolute ที่ไม่ซ้อน host
     const clean = str.startsWith('/') ? str : `/${str}`;
     return `${host}${clean}`;
   };
+
+  // === OR# display helpers ===
+  const getDisplayOrderCode = (o) => {
+    if (!o) return '';
+    if (o.order_code) return o.order_code; // ใช้จาก backend เลยถ้ามี
+    const d = o.created_at ? new Date(o.created_at) : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const seq = String(o.id ?? 0).padStart(4, '0');
+    return `OR#${y}${m}${day}-${seq}`;
+  };
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard?.writeText(text);
+    } catch { /* ignore */ }
+  };
+
+  const safeFileName = (s) => String(s).replace(/[^\w\-#]+/g, '-');
 
   // === fetch order ===
   useEffect(() => {
@@ -166,6 +185,8 @@ function OrderDetail() {
     );
   }
 
+  const displayCode = getDisplayOrderCode(order);
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
@@ -173,9 +194,20 @@ function OrderDetail() {
 
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-2xl font-bold text-green-700">
-              รายละเอียดคำสั่งซื้อ #{String(order.id).padStart(4, '0')}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-bold text-green-700 font-mono">
+                {displayCode}
+              </h2>
+              <button
+                className="text-xs border rounded px-2 py-0.5 hover:bg-gray-50"
+                onClick={() => copyText(displayCode)}
+                title="คัดลอกเลขออเดอร์"
+              >
+                คัดลอก
+              </button>
+              <span className="text-xs text-gray-400">#{String(order.id).padStart(4, '0')}</span>
+            </div>
+
             <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusClass(order.status)}`}>
               {statusText(order.status)}
             </span>
@@ -274,7 +306,7 @@ function OrderDetail() {
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm font-semibold"
                 target="_blank"
                 rel="noopener noreferrer"
-                download={`receipt_order_${order.id}.pdf`}
+                download={`receipt_${safeFileName(displayCode)}.pdf`}
               >
                 ดาวน์โหลดใบเสร็จ
               </a>

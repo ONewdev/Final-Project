@@ -1,26 +1,6 @@
-// POST /api/notifications/:id/mark-read
-exports.markReadById = async (req, res) => {
-  const { id } = req.params;
-  if (!id) {
-    return res.status(400).json({ success: false, message: 'Notification id is required' });
-  }
-  try {
-    const affected = await db('notifications')
-      .where({ id })
-      .update({ is_read: 1, read_at: db.fn.now() });
-    if (affected > 0) {
-      res.json({ success: true, message: 'Notification marked as read', affected });
-    } else {
-      res.status(404).json({ success: false, message: 'Notification not found' });
-    }
-  } catch (err) {
-    console.error('Error marking notification as read:', err);
-    res.status(500).json({ success: false, message: 'Failed to mark notification as read', error: err.message });
-  }
-};
 const db = require('../db');
 
-// GET /api/notifications?customer_id=123
+
 exports.getNotificationsByCustomer = async (req, res) => {
   try {
     const { customer_id } = req.query;
@@ -117,5 +97,24 @@ exports.markAllReadByCustomer = async (req, res) => {
   } catch (err) {
     console.error('Error marking notifications as read:', err);
     res.status(500).json({ success: false, message: 'Failed to mark as read', error: err.message });
+  }
+};
+exports.markReadById = async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    return res.status(400).json({ success: false, message: 'Notification id is required' });
+  }
+  try {
+    const affected = await db('notifications')
+      .where({ id })
+      .update({ is_read: 1, read_at: db.fn.now() });
+    if (affected > 0) {
+      res.json({ success: true, message: 'Notification marked as read', affected });
+    } else {
+      res.status(404).json({ success: false, message: 'Notification not found' });
+    }
+  } catch (err) {
+    console.error('Error marking notification as read:', err);
+    res.status(500).json({ success: false, message: 'Failed to mark notification as read', error: err.message });
   }
 };

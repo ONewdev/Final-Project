@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const db = require('../db');
+const sendEmail = require('../utils/sendEmail');
 
 // ---------- Helpers ----------
 const fmtMoney = (n) =>
@@ -209,7 +210,11 @@ function drawTotalsBox(doc, { subtotal = 0, shipping = 0, discount = 0, vatRate 
 exports.shipOrder = async (req, res) => {
   const { id } = req.params;
   try {
-    const order = await db('orders').where('id', id).first();
+    const order = await db('orders as o')
+      .leftJoin('customers as c', 'o.customer_id', 'c.id')
+      .select('o.*', 'c.name as customer_name', 'c.email as email')
+      .where('o.id', id)
+      .first();
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
@@ -234,7 +239,11 @@ exports.shipOrder = async (req, res) => {
 exports.getOrderById = async (req, res) => {
   const { id } = req.params;
   try {
-    const order = await db('orders').where('id', id).first();
+    const order = await db('orders as o')
+      .leftJoin('customers as c', 'o.customer_id', 'c.id')
+      .select('o.*', 'c.name as customer_name', 'c.email as email')
+      .where('o.id', id)
+      .first();
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
     const items = await db('order_items')
@@ -254,7 +263,8 @@ exports.getOrderById = async (req, res) => {
 exports.createOrder = async (req, res) => {
   const trx = await db.transaction();
   try {
-    const { customer_id, items, order_type, customDetails, shipping_address, phone } = req.body;
+    const { customer_id, items, order_type, customDetails, shipping_address, phone, address_id, product_list } = req.body;
+    const productListPayload = Array.isArray(product_list) ? product_list : [];
 
     if (!customer_id || !Array.isArray(items) || items.length === 0) {
       await trx.rollback();
@@ -269,34 +279,60 @@ exports.createOrder = async (req, res) => {
       }
     }
 
+    // ใส่ address_id และตั้ง total_price ชั่วคราวเป็น 0
     const [orderId] = await trx('orders').insert({
       customer_id,
+      address_id: address_id || null,         // ⬅️ เพิ่ม
+      total_price: 0,                         // ⬅️ เพิ่ม (จะอัปเดตตอนท้าย)
       order_type: order_type || 'standard',
       status: 'pending',
       shipping_address: shipping_address || null,
       phone: phone || null,
+      product_list: JSON.stringify(productListPayload),
       created_at: db.fn.now(),
     });
 
-    for (const item of items) {
+    let total = 0; // ⬅️ ไว้รวมราคา
+    const storedProductList = [];
+
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
       const product = await trx('products').where({ id: item.product_id }).first();
       if (!product) {
         await trx.rollback();
         return res.status(404).json({ message: `Product ${item.product_id} not found` });
       }
+
       await trx('order_items').insert({
         order_id: orderId,
         product_id: item.product_id,
         quantity: item.quantity,
         price: product.price,
       });
-      // ตัดจำนวนสินค้าใน products table ตามจำนวนที่ซื้อ
+
+      // ตัดสต๊อก
       const newQty = product.quantity - item.quantity;
       if (newQty < 0) {
         await trx.rollback();
         return res.status(400).json({ message: `สินค้า ${product.name} มีจำนวนไม่พอในคลัง` });
       }
       await trx('products').where({ id: item.product_id }).update({ quantity: newQty });
+      const clientEntry = productListPayload.length > index ? productListPayload[index] : null;
+      let entryQty = Number(item.quantity);
+      if (isNaN(entryQty)) {
+        entryQty = clientEntry && !isNaN(Number(clientEntry.product_qty)) ? Number(clientEntry.product_qty) : 0;
+      }
+      let entryName = product && product.name ? product.name : '';
+      if (clientEntry && clientEntry.product_name) {
+        entryName = clientEntry.product_name;
+      }
+      storedProductList.push({
+        product_name: entryName,
+        product_qty: entryQty,
+      });
+
+      // รวมราคา
+      total += Number(product.price) * Number(item.quantity || 0);
     }
 
     if (order_type === 'custom' && customDetails) {
@@ -308,7 +344,18 @@ exports.createOrder = async (req, res) => {
         special_request: customDetails.special_request || null,
         estimated_price: customDetails.estimated_price || null,
       });
+
+      // ถ้าอยากนับ estimated เข้า total ด้วย ให้ปลดคอมเมนต์ 2 บรรทัดล่างนี้
+      // if (customDetails.estimated_price) {
+      //   total += Number(customDetails.estimated_price) || 0;
+      // }
     }
+
+    // อัปเดต total_price กลับเข้า orders
+    await trx('orders').where({ id: orderId }).update({
+      total_price: total,
+      product_list: JSON.stringify(storedProductList),
+    });
 
     await trx.commit();
 
@@ -319,13 +366,14 @@ exports.createOrder = async (req, res) => {
       message: `ออเดอร์ #${orderId} ถูกสร้างเรียบร้อยแล้ว`,
     });
 
-    res.status(201).json({ message: 'Order created successfully', orderId });
+    res.status(201).json({ message: 'Order created successfully', orderId, total_price: total });
   } catch (err) {
     await trx.rollback();
     console.error('Error creating order:', err);
     res.status(500).json({ message: 'Error creating order', error: err.message });
   }
 };
+
 
 // ดึงคำสั่งซื้อทั้งหมด (รวม items + total)
 exports.getAllOrders = async (req, res) => {
@@ -395,24 +443,84 @@ exports.getOrdersByCustomer = async (req, res) => {
   }
 };
 
-// อัปเดตสถานะคำสั่งซื้อ
+// อัปเดตสถานะคำสั่งซื้อ (พร้อมแจ้งเตือนและส่งอีเมล)
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
     let { status } = req.body;
     // ตรวจสอบสถานะที่อนุญาต
-    const allowed = ['pending', 'approved', 'shipped', 'delivered', 'cancelled'];
+    const allowed = ['pending', 'approved', 'processing', 'shipped', 'delivered', 'cancelled'];
     if (!allowed.includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
-    // อัปเดตวันที่ตามสถานะ
-    const updateData = { status };
-    if (status === 'approved') updateData.approved_at = db.fn.now();
-    if (status === 'shipped') updateData.shipped_at = db.fn.now();
-    if (status === 'delivered') updateData.delivered_at = db.fn.now();
-    if (status === 'cancelled') updateData.cancelled_at = db.fn.now();
+  // อัปเดตวันที่ตามสถานะ
+  const updateData = { status };
+  if (status === 'approved') updateData.approved_at = db.fn.now();
+  if (status === 'processing') updateData.processing_at = db.fn.now();
+  if (status === 'shipped') updateData.shipped_at = db.fn.now();
+  if (status === 'delivered') updateData.delivered_at = db.fn.now();
+  if (status === 'cancelled') updateData.cancelled_at = db.fn.now();
     const changed = await db('orders').where({ id }).update(updateData);
     if (!changed) return res.status(404).json({ message: 'Order not found' });
+
+    // ดึงข้อมูล order และ customer
+    const order = await db('orders').where({ id }).first();
+    const customer = order?.customer_id ? await db('customers').where({ id: order.customer_id }).first() : null;
+
+    // กำหนดข้อความแจ้งเตือนและอีเมล
+    let notify = { type: 'info', title: '', message: '' };
+    if (status === 'approved') {
+      notify = {
+        type: 'success',
+        title: 'คำสั่งซื้อได้รับการอนุมัติ',
+        message: `คำสั่งซื้อ #${id} ของคุณได้รับการอนุมัติแล้ว`,
+      };
+    } else if (status === 'processing') {
+      notify = {
+        type: 'info',
+        title: 'กำลังเตรียมสินค้า',
+        message: `คำสั่งซื้อ #${id} ของคุณอยู่ระหว่างการเตรียมสินค้า กรุณารอการจัดส่ง`,
+      };
+    } else if (status === 'shipped') {
+      notify = {
+        type: 'info',
+        title: 'คำสั่งซื้อถูกจัดส่งแล้ว',
+        message: `คำสั่งซื้อ #${id} ของคุณถูกจัดส่งแล้ว กรุณาตรวจสอบสถานะการจัดส่ง`,
+      };
+    } else if (status === 'delivered') {
+      notify = {
+        type: 'success',
+        title: 'จัดส่งสำเร็จ',
+        message: `คำสั่งซื้อ #${id} ของคุณถูกจัดส่งสำเร็จแล้ว`,
+      };
+    } else if (status === 'cancelled') {
+      notify = {
+        type: 'warning',
+        title: 'คำสั่งซื้อถูกยกเลิก',
+        message: `คำสั่งซื้อ #${id} ของคุณถูกยกเลิกแล้ว`,
+      };
+    }
+
+    // แจ้งเตือนในระบบ
+    await sendNotification({
+      customer_id: order.customer_id,
+      ...notify,
+    });
+
+    // ส่งอีเมลถ้ามีอีเมลลูกค้า
+    if (customer?.email) {
+      const emailSubject = notify.title || 'Order status updated';
+      const emailBody = notify.message || `Order #${id} status has been updated to ${status}`;
+      const emailHtml = `<div style="font-family: 'Segoe UI', Tahoma, sans-serif; line-height: 1.6;">
+        <h3 style="margin: 0 0 12px; color: #15803d;">${emailSubject}</h3>
+        <p style="margin: 0 0 12px; color: #1f2937;">${emailBody}</p>
+        <p style="margin: 16px 0 0; color: #4b5563;">Order number: <strong>#${id}</strong></p>
+        <p style="margin: 0; color: #4b5563;">Current status: <strong>${status}</strong></p>
+        <p style="margin: 24px 0 0; color: #6b7280; font-size: 13px;">Thank you for shopping with us.</p>
+      </div>`;
+      await sendEmail(customer.email, emailSubject, emailHtml);
+    }
+
     res.json({ message: 'Order status updated' });
   } catch (err) {
     console.error('Error updating order status:', err);
@@ -424,7 +532,11 @@ exports.updateOrderStatus = async (req, res) => {
 exports.approveOrder = async (req, res) => {
   const { id } = req.params;
   try {
-    const order = await db('orders').where('id', id).first();
+    const order = await db('orders as o')
+      .leftJoin('customers as c', 'o.customer_id', 'c.id')
+      .select('o.*', 'c.name as customer_name', 'c.email as email')
+      .where('o.id', id)
+      .first();
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
@@ -484,7 +596,8 @@ exports.cancelOrder = async (req, res) => {
 
     // คืน stock สินค้า
     const items = await db('order_items').where({ order_id: id });
-    for (const item of items) {
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
       await db('products')
         .where({ id: item.product_id })
         .increment('quantity', item.quantity);
@@ -596,3 +709,9 @@ exports.generateReceiptPdf = async (req, res) => {
     if (!res.headersSent) res.status(500).send('เกิดข้อผิดพลาดในการสร้างไฟล์ PDF');
   }
 };
+
+
+
+
+
+

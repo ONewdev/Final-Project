@@ -5,6 +5,7 @@ import Profile from '../pages/users/Profile';
 import Favorite from '../pages/users/Favorite';
 import Orders from '../pages/users/Orders';
 import OrdersPending from '../pages/users/OrdersPending';
+import OrdersProcessing from '../pages/users/OrdersProcessing';
 import OrdersShipped from '../pages/users/OrdersShipped';
 import OrdersDelivered from '../pages/users/OrdersDelivered';
 import OrdersCancelled from '../pages/users/OrdersCancelled';
@@ -32,10 +33,11 @@ export default function UsersRoutes() {
         <Route path="order/:id" element={<OrderDetail />} />
 
         {/* แยกตามสถานะ */}
-        <Route path="pending" element={<OrdersPending />} />
-        <Route path="shipped" element={<OrdersShipped />} />
-        <Route path="delivered" element={<OrdersDelivered />} />
-        <Route path="cancelled" element={<OrdersCancelled />} />
+  <Route path="pending" element={<OrdersPending />} />
+  <Route path="processing" element={<OrdersProcessing />} />
+  <Route path="shipped" element={<OrdersShipped />} />
+  <Route path="delivered" element={<OrdersDelivered />} />
+  <Route path="cancelled" element={<OrdersCancelled />} />
         <Route path="orderscustom" element={<OrdersCustom />} />
 
         {/* อื่น ๆ */}

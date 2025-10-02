@@ -17,6 +17,16 @@ export default function Register() {
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const serverErrorMessages = {
+    USERNAME_MIN_LENGTH: 'Display name must be at least 3 characters.',
+    EMAIL_INVALID: 'Please enter a valid email address.',
+    PASSWORD_MIN_LENGTH: 'Password must be at least 6 characters.',
+    EMAIL_ALREADY_EXISTS: 'This email is already registered.',
+    VALIDATION_ERROR: 'Please review the highlighted fields.',
+    REGISTERED_WITHOUT_EMAIL: 'Account created but the welcome email could not be sent.',
+    REGISTERED: 'Account created successfully.',
+    SERVER_ERROR: 'Something went wrong. Please try again.',
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -29,16 +39,17 @@ export default function Register() {
   const validateForm = () => {
     const newErrors = {};
     if (!formData.username || formData.username.length < 3) {
-      newErrors.username = 'กรุณากรอกชื่อผู้ใช้อย่างน้อย 3 ตัวอักษร';
+      newErrors.username = 'Display name must be at least 3 characters.';
     }
-    if (!formData.email.includes('@')) {
-      newErrors.email = 'กรุณากรอกอีเมลที่ถูกต้อง';
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address.';
     }
-    if (formData.password.length < 6) {
-      newErrors.password = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+    if (!formData.password || formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters.';
     }
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'รหัสผ่านไม่ตรงกัน';
+      newErrors.confirmPassword = 'Passwords do not match.';
     }
     return newErrors;
   };
@@ -58,31 +69,46 @@ export default function Register() {
         body: JSON.stringify({
           username: formData.username,
           email: formData.email,
-          password: formData.password
+          password: formData.password,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = data?.message || (res.status === 400 ? 'ข้อมูลไม่ถูกต้อง' : 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
-        throw new Error(msg);
+        if (data?.errors) {
+          const fieldMessages = {};
+          Object.entries(data.errors).forEach(([field, code]) => {
+            const key = field === 'username' ? 'username' : field;
+            fieldMessages[key] = serverErrorMessages[code] || 'Please check this field.';
+          });
+          if (data?.message && !fieldMessages.general) {
+            fieldMessages.general = serverErrorMessages[data.message] || data.message;
+          }
+          setErrors(fieldMessages);
+          return;
+        }
+        const fallbackMessage = serverErrorMessages[data?.message] || data?.message ||
+          (res.status === 400 ? 'Unable to register with the provided information.' : 'Unable to complete registration.');
+        setErrors({ general: fallbackMessage });
+        return;
       }
 
-      let successMsg = 'คุณสามารถเข้าสู่ระบบได้ทันที';
+      let successMessage = serverErrorMessages.REGISTERED;
       if (data.emailSent === false) {
-        successMsg = 'สมัครสมาชิกสำเร็จ แต่ส่งอีเมลไม่สำเร็จ กรุณาตรวจสอบอีเมลของคุณ';
+        successMessage = serverErrorMessages.REGISTERED_WITHOUT_EMAIL;
       } else if (data.emailSent === true) {
-        successMsg = 'สมัครสมาชิกสำเร็จ! ระบบได้แจ้งเตือนไปยังอีเมลของคุณแล้วครับผม';
+        successMessage = 'Account created! A welcome email is on its way.';
       }
+
       Swal.fire({
-        title: 'สมัครสมาชิกสำเร็จ!',
-        text: successMsg,
+        title: 'Account created',
+        text: successMessage,
         icon: 'success',
-        confirmButtonText: 'ไปที่หน้าล็อกอิน',
+        confirmButtonText: 'Go to login',
       }).then(() => {
         navigate('/login');
       });
     } catch (err) {
-      setErrors({ general: err.message });
+      setErrors({ general: err.message || 'Unable to complete registration.' });
     } finally {
       setIsLoading(false);
     }

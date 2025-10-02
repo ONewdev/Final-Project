@@ -1,4 +1,4 @@
-﻿const db = require('../db'); // ได้ instance ของ knex
+const db = require('../db'); // อินสแตนซ์ของ Knex ที่เชื่อมต่อฐานข้อมูล
 const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
@@ -7,6 +7,13 @@ const crypto = require('crypto');
 const { generateResetToken, hashToken, verifyHashedToken } = require('../utils/passwordReset');
 const sendEmail = require('../utils/sendEmail');
 const jwt = require('jsonwebtoken');
+
+const escapeHtml = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
 
 // === ตั้งค่า multer สำหรับอัปโหลดรูปโปรไฟล์ ===
 const profileUploadDir = path.join(__dirname, '..', 'public', 'uploads', 'profiles');
@@ -26,22 +33,26 @@ const profileUpload = multer({
   storage: profileStorage,
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('อนุญาตเฉพาะไฟล์รูปภาพเท่านั้น!'), false);
+    else cb(new Error('อัปโหลดได้เฉพาะไฟล์รูปภาพเท่านั้น!'), false);
   },
-  limits: { fileSize: 5 * 1024 * 1024 }, // สูงสุด 5MB
+  limits: { fileSize: 5 * 1024 * 1024 }, // จำกัดไฟล์ 5MB
 });
 
-// ส่งออก middleware multer สำหรับใช้ใน routes
+// ส่ง middleware multer ไปใช้ใน routes
 exports.uploadProfilePicture = profileUpload.single('profile_picture');
 
 // ========================================================
 // Customers
 // ========================================================
 
-// ดึงข้อมูลลูกค้าทั้งหมด (ตัด created_at, updated_at ออกจาก select)
+// ดึงรายการลูกค้าทั้งหมด (เลือก created_at เพื่อเรียง, และ select ฟิลด์ที่จำเป็น)
 exports.getAllCustomers = async (req, res) => {
   try {
-    const rows = await db('customers')
+    const { limit, order = 'desc' } = req.query;
+    const parsedLimit = Number.parseInt(limit, 10);
+    const sortDirection = order === 'asc' ? 'asc' : 'desc';
+
+    const query = db('customers')
       .leftJoin('subdistricts', 'customers.subdistrict_id', 'subdistricts.id')
       .leftJoin('districts', 'customers.district_id', 'districts.id')
       .leftJoin('provinces', 'customers.province_id', 'provinces.id')
@@ -56,53 +67,61 @@ exports.getAllCustomers = async (req, res) => {
         'customers.subdistrict_id',
         'customers.district_id',
         'customers.province_id',
+        'customers.created_at',
         'subdistricts.name_th as subdistrict_name',
         'districts.name_th as district_name',
         'provinces.name_th as province_name',
         'subdistricts.postal_code'
-      );
+      )
+      .orderBy('customers.created_at', sortDirection);
+
+    if (!Number.isNaN(parsedLimit) && parsedLimit > 0) {
+      query.limit(parsedLimit);
+    }
+
+    const rows = await query;
 
     res.json(rows);
   } catch (error) {
     console.error('Error fetching customers:', error.message);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
+    res.status(500).json({ message: 'ไม่สามารถดึงข้อมูลลูกค้าได้' });
   }
 };
 
-// ลบข้อมูลลูกค้า
+// ลบลูกค้า
 exports.deleteCustomer = async (req, res) => {
   const { id } = req.params;
   try {
     await db('customers').where('id', id).del();
-    res.status(200).json({ message: 'ลบลูกค้าเรียบร้อยแล้ว' });
+    res.status(200).json({ message: 'ลบลูกค้าสำเร็จ' });
   } catch (error) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
+    res.status(500).json({ message: 'ไม่สามารถลบลูกค้าได้' });
   }
 };
 
-// เปลี่ยนสถานะลูกค้า (validate ค่าที่รับ)
+// เปลี่ยนสถานะลูกค้า (validate ค่าที่รับมา)
 exports.changeCustomerStatus = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
   if (!['active', 'inactive'].includes(status)) {
-    return res.status(400).json({ message: 'สถานะไม่ถูกต้อง' });
+    return res.status(400).json({ message: 'ค่าสถานะไม่ถูกต้อง' });
   }
 
   try {
     await db('customers').where('id', id).update({ status });
-    res.status(200).json({ message: `อัปเดตสถานะเป็น ${status} เรียบร้อย` });
+    res.status(200).json({ message: `เปลี่ยนสถานะเป็น ${status} สำเร็จ` });
   } catch (error) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
+    res.status(500).json({ message: 'ไม่สามารถเปลี่ยนสถานะได้' });
   }
 };
 
-// ลบเฉพาะรูปโปรไฟล์ ไม่ลบบัญชี
+// ลบรูปโปรไฟล์ของลูกค้า
 exports.deleteProfilePicture = async (req, res) => {
   const { id } = req.params;
   try {
     const user = await db('customers').where({ id }).first();
-    if (!user) return res.status(404).json({ message: 'ไม่พบผู้ใช้งาน' });
+    if (!user) return res.status(404).json({ message: 'ไม่พบบัญชีผู้ใช้' });
 
     if (user.profile_picture) {
       const filePath = path.join(__dirname, '..', 'public', user.profile_picture);
@@ -110,21 +129,21 @@ exports.deleteProfilePicture = async (req, res) => {
         try { fs.unlinkSync(filePath); } catch (err) { /* ignore */ }
       }
       await db('customers').where({ id }).update({ profile_picture: null });
-      return res.status(200).json({ message: 'ลบรูปโปรไฟล์สำเร็จ' });
+      return res.status(200).json({ message: 'ลบรูปโปรไฟล์เรียบร้อยแล้ว' });
     }
     return res.status(400).json({ message: 'ไม่มีรูปโปรไฟล์ให้ลบ' });
   } catch (error) {
     console.error('Error deleting profile picture:', error);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการลบรูปโปรไฟล์' });
+    res.status(500).json({ message: 'ไม่สามารถลบรูปโปรไฟล์ได้' });
   }
 };
 
-// ลบโปรไฟล์ลูกค้า (และไฟล์รูปโปรไฟล์ถ้ามี)
+// ลบโปรไฟล์ลูกค้า (รวมไฟล์รูปถ้ามี)
 exports.deleteCustomerProfile = async (req, res) => {
   const { id } = req.params;
   try {
     const user = await db('customers').where({ id }).first();
-    if (!user) return res.status(404).json({ message: 'ไม่พบผู้ใช้งาน' });
+    if (!user) return res.status(404).json({ message: 'ไม่พบบัญชีผู้ใช้' });
 
     if (user.profile_picture) {
       const filePath = path.join(__dirname, '..', 'public', user.profile_picture);
@@ -134,14 +153,14 @@ exports.deleteCustomerProfile = async (req, res) => {
     }
 
     await db('customers').where({ id }).del();
-    res.status(200).json({ message: 'ลบบัญชีผู้ใช้สำเร็จ' });
+    res.status(200).json({ message: 'ลบโปรไฟล์ลูกค้าเรียบร้อยแล้ว' });
   } catch (error) {
     console.error('Error deleting customer profile:', error);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการลบบัญชีผู้ใช้' });
+    res.status(500).json({ message: 'ไม่สามารถลบโปรไฟล์ลูกค้าได้' });
   }
 };
 
-// อัปเดตข้อมูลลูกค้าทั่วไป (ยังอัปเดต updated_at แต่ไม่ส่งคืนฟิลด์เวลา)
+// อัปเดตข้อมูลลูกค้า (อัปเดต updated_at เสมอ)
 exports.updateCustomer = async (req, res) => {
   const { id } = req.params;
   const { email, name, status } = req.body;
@@ -149,10 +168,10 @@ exports.updateCustomer = async (req, res) => {
   try {
     const updated_at = new Date();
     await db('customers').where('id', id).update({ email, name, status, updated_at });
-    res.status(200).json({ message: 'อัปเดตข้อมูลลูกค้าเรียบร้อย' });
+    res.status(200).json({ message: 'อัปเดตข้อมูลลูกค้าเรียบร้อยแล้ว' });
   } catch (error) {
     console.error('Error updating customer:', error);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
+    res.status(500).json({ message: 'ไม่สามารถอัปเดตข้อมูลลูกค้าได้' });
   }
 };
 
@@ -167,14 +186,14 @@ exports.login = async (req, res) => {
 
   try {
     const user = await db('customers').where({ email }).first();
-    if (!user) return res.status(401).json({ message: 'อีเมลไม่ถูกต้อง' });
+    if (!user) return res.status(401).json({ message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' });
 
     if (user.status === 'inactive') {
-      return res.status(403).json({ message: 'บัญชีของคุณถูกปิดการใช้งาน กรุณาติดต่อผู้ดูแลระบบ' });
+      return res.status(403).json({ message: 'บัญชีของคุณถูกระงับ กรุณาติดต่อผู้ดูแลระบบ' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: 'รหัสผ่านไม่ถูกต้อง' });
+    if (!isMatch) return res.status(401).json({ message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' });
 
     const token = jwt.sign(
       { user_id: user.id, email: user.email, name: user.name },
@@ -188,66 +207,119 @@ exports.login = async (req, res) => {
       token
     });
   } catch (error) {
-    console.error('เข้าสู่ระบบไม่สำเร็จ', error.message);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' });
+    console.error('Login error:', error.message);
+    res.status(500).json({ message: 'ไม่สามารถเข้าสู่ระบบได้' });
   }
 };
 
-// สมัครสมาชิกลูกค้า (ยังบันทึก created_at/updated_at ภายใน แต่ไม่ต้องส่งคืนฟิลด์เวลา)
+// สมัครสมาชิก (ทำ validation และส่งอีเมลต้อนรับ)
 exports.registerCustomer = async (req, res) => {
-  let { email, password, username } = req.body;
-  email = (email || '').trim().toLowerCase();
-  const name = (username || '').trim();
+  const { email, password, username } = req.body || {};
+  const normalisedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const displayName = typeof username === 'string' ? username.trim() : '';
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const fieldErrors = {};
+
+  if (!displayName || displayName.length < 3) {
+    fieldErrors.username = 'USERNAME_MIN_LENGTH';
+  }
+  if (!normalisedEmail || !emailRegex.test(normalisedEmail)) {
+    fieldErrors.email = 'EMAIL_INVALID';
+  }
+  if (typeof password !== 'string' || password.length < 6) {
+    fieldErrors.password = 'PASSWORD_MIN_LENGTH';
+  }
+
+  if (Object.keys(fieldErrors).length) {
+    return res.status(400).json({ message: 'VALIDATION_ERROR', errors: fieldErrors });
+  }
 
   try {
     const existingEmail = await db('customers')
-      .whereRaw('LOWER(email) = ?', [email])
+      .whereRaw('LOWER(email) = ?', [normalisedEmail])
       .first();
-    if (existingEmail) return res.status(400).json({ message: 'อีเมลนี้มีอยู่แล้ว' });
-
-    const existingName = await db('customers').where({ name }).first();
-    if (existingName) return res.status(400).json({ message: 'ชื่อผู้ใช้นี้มีอยู่แล้ว' });
+    if (existingEmail) {
+      return res.status(400).json({
+        message: 'EMAIL_ALREADY_EXISTS',
+        errors: { email: 'EMAIL_ALREADY_EXISTS' },
+      });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const now = new Date();
 
     const customerData = {
-      email,
+      email: normalisedEmail,
       password: hashedPassword,
-      name,
+      name: displayName,
       created_at: now,
       updated_at: now,
       status: 'active',
       profile_picture: null,
     };
 
-    const [id] = await db('customers').insert(customerData);
+    const insertResult = await db('customers').insert(customerData);
+    const id = Array.isArray(insertResult) ? insertResult[0] : insertResult;
 
-    // === ส่งอีเมลยืนยันการสมัคร ===
     const subject = 'ยินดีต้อนรับสู่ ALShop';
+    const safeName = escapeHtml(displayName || 'Customer');
+    const safeEmail = escapeHtml(normalisedEmail);
+    const baseUrl = (process.env.APP_BASE_URL || 'https://alshop-crru.vercel.app').replace(/\/+$/, '');
+    const loginUrl = `${baseUrl}/login`;
+    const safeLoginUrl = escapeHtml(loginUrl);
     const html = `
-      <div style="font-family: Arial, sans-serif; color: #222;">
-        <h2 style="color: #16a34a;">สวัสดีคุณ ${name}</h2>
-        <p>ขอบคุณที่สมัครสมาชิกกับ <b>ALShop</b>!</p>
-        <p>บัญชีของคุณถูกสร้างเรียบร้อยแล้ว คุณสามารถเข้าสู่ระบบได้ทันทีด้วยอีเมล <b>${email}</b></p>
-        <hr style="margin: 24px 0;">
-        <p>หากคุณไม่ได้เป็นผู้สมัครสมาชิกนี้ กรุณาติดต่อทีมงาน ALShop ได้ที่ <a href="mailto:support@alshop.com">support@alshop.com</a></p>
-        <p style="margin-top: 32px; color: #555; font-size: 14px;">ขอขอบคุณที่ไว้วางใจใช้บริการ<br>ทีมงาน ALShop<br>www.alshop.com</p>
+      <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif; color: #222; background: linear-gradient(to bottom right, #f0fdf4, #fff, #ecfdf5);">
+        <div style="text-align: center; padding: 20px 0;">
+          <h1 style="color: #15803d; font-size: 28px; margin: 0;">ยินดีต้อนรับสู่ ALShop</h1>
+          <p style="color: #166534; font-size: 18px; margin-top: 10px;">สวัสดีคุณ ${safeName}</p>
+        </div>
+        
+        <div style="background: white; border-radius: 10px; padding: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <p style="color: #444; font-size: 16px; line-height: 1.6;">
+            คุณได้สมัครสมาชิกกับ <b>ALShop</b> สำเร็จแล้ว<br>
+            อีเมลที่ใช้สมัคร: <b style="color: #15803d;">${safeEmail}</b>
+          </p>
+          
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${safeLoginUrl}" 
+               style="display: inline-block; background: linear-gradient(to right, #16a34a, #15803d); 
+                      color: white; text-decoration: none; padding: 12px 32px; 
+                      border-radius: 50px; font-weight: bold; font-size: 16px;
+                      box-shadow: 0 2px 4px rgba(22,163,74,0.2);">
+              เข้าสู่ระบบ
+            </a>
+          </div>
+          
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+          
+          <p style="color: #666; font-size: 14px; line-height: 1.6;">
+            หากมีข้อสงสัย ติดต่อเราได้ที่ 
+            <a href="mailto:support@alshop.com" style="color: #16a34a; text-decoration: none;">support@alshop.com</a>
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 32px; color: #666; font-size: 14px;">
+          <img src="https://alshop-crru.vercel.app/logo.png" alt="ALShop Logo" style="width: 60px; margin-bottom: 16px;"><br>
+          Aluminium Shop<br>
+          <a href="${safeLoginUrl}" style="color: #16a34a; text-decoration: none;">${safeLoginUrl}</a>
+        </div>
       </div>
     `;
-    const emailResult = await sendEmail(email, subject, html);
+    const emailResult = await sendEmail(normalisedEmail, subject, html);
 
     if (!emailResult) {
       return res.status(201).json({
-        message: 'สมัครสมาชิกสำเร็จ แต่ส่งอีเมลไม่สำเร็จ กรุณาตรวจสอบอีเมลของคุณ',
+        message: 'REGISTERED_WITHOUT_EMAIL',
         id,
-        emailSent: false
+        emailSent: false,
       });
     }
-    res.status(201).json({ message: 'สมัครสมาชิกสำเร็จ', id, emailSent: true });
+
+    res.status(201).json({ message: 'REGISTERED', id, emailSent: true });
   } catch (error) {
     console.error('Error in registerCustomer:', error);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการสมัครสมาชิก' });
+    res.status(500).json({ message: 'SERVER_ERROR' });
   }
 };
 
@@ -255,7 +327,7 @@ exports.registerCustomer = async (req, res) => {
 // Profile
 // ========================================================
 
-// ดึงโปรไฟล์ลูกค้า (ตาม id) — ตัด created_at/updated_at ออกจาก select
+// ดึงข้อมูลลูกค้าตาม id (join จังหวัด/อำเภอ/ตำบล)
 exports.getCustomerById = async (req, res) => {
   const { id } = req.params;
 
@@ -283,15 +355,15 @@ exports.getCustomerById = async (req, res) => {
       .where('customers.id', id)
       .first();
 
-    if (!user) return res.status(404).json({ message: 'ไม่พบผู้ใช้งาน' });
+    if (!user) return res.status(404).json({ message: 'ไม่พบบัญชีลูกค้า' });
     res.status(200).json(user);
   } catch (error) {
     console.error('Error fetching customer:', error.message);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดที่เซิร์ฟเวอร์' });
+    res.status(500).json({ message: 'ไม่สามารถดึงข้อมูลลูกค้าได้' });
   }
 };
 
-// แก้ไขโปรไฟล์ลูกค้า — อัปเดต updated_at ภายใน แต่ไม่รีเทิร์นฟิลด์เวลา
+// อัปเดตโปรไฟล์ลูกค้า (อัปเดต updated_at เสมอ)
 exports.updateCustomerProfile = async (req, res) => {
   const { id } = req.params;
   const { name, email, phone, address, subdistrict_id, district_id, province_id, postal_code } = req.body;
@@ -320,7 +392,7 @@ exports.updateCustomerProfile = async (req, res) => {
 
     await db('customers').where({ id }).update(updateData);
 
-    // รีเทิร์น user ที่ไม่รวม created_at/updated_at
+    // ส่ง user กลับ (ฟิลด์หลัก)
     const updatedUser = await db('customers')
       .select(
         'id',
@@ -339,12 +411,12 @@ exports.updateCustomerProfile = async (req, res) => {
       .first();
 
     res.status(200).json({
-      message: 'อัปเดตโปรไฟล์สำเร็จ',
+      message: 'อัปเดตโปรไฟล์เรียบร้อยแล้ว',
       user: updatedUser
     });
   } catch (error) {
     console.error('Error updating customer profile:', error);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการอัปเดตโปรไฟล์' });
+    res.status(500).json({ message: 'ไม่สามารถอัปเดตโปรไฟล์ได้' });
   }
 };
 
@@ -376,7 +448,7 @@ exports.getCustomerFavorites = async (req, res) => {
   } catch (error) {
     console.error('Error fetching customer favorites:', error.message);
     res.status(500).json({
-      message: 'เกิดข้อผิดพลาดในการดึงรายการโปรด',
+      message: 'ไม่สามารถดึงรายการโปรดได้',
       error: error.message
     });
   }
@@ -390,33 +462,33 @@ exports.getProvinces = async (req, res) => {
     const provinces = await db('provinces').select('id', 'name_th');
     res.json(provinces);
   } catch (error) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงจังหวัด' });
+    res.status(500).json({ message: 'ไม่สามารถดึงรายชื่อจังหวัดได้' });
   }
 };
 
 exports.getDistricts = async (req, res) => {
   const { province_id } = req.query;
   try {
-    if (!province_id) return res.status(400).json({ message: 'ต้องระบุ province_id' });
+    if (!province_id) return res.status(400).json({ message: 'กรุณาระบุ province_id' });
     const districts = await db('districts')
       .where('province_id', province_id)
       .select('id', 'name_th');
     res.json(districts);
   } catch (error) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงอำเภอ' });
+    res.status(500).json({ message: 'ไม่สามารถดึงอำเภอได้' });
   }
 };
 
 exports.getSubdistricts = async (req, res) => {
   const { district_id } = req.query;
   try {
-    if (!district_id) return res.status(400).json({ message: 'ต้องระบุ district_id' });
+    if (!district_id) return res.status(400).json({ message: 'กรุณาระบุ district_id' });
     const subdistricts = await db('subdistricts')
       .where('district_id', district_id)
       .select('id', 'name_th', 'postal_code');
     res.json(subdistricts);
   } catch (error) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงตำบล' });
+    res.status(500).json({ message: 'ไม่สามารถดึงตำบลได้' });
   }
 };
 
@@ -424,10 +496,10 @@ exports.getSubdistricts = async (req, res) => {
 // Email Verification & Password Reset
 // ========================================================
 
-// ยืนยันอีเมล (ลิงก์จากอีเมลสมัคร)
+// ยืนยันอีเมล (จากลิงก์ในอีเมล)
 exports.verifyEmail = async (req, res) => {
   const { token } = req.query;
-  if (!token) return res.status(400).json({ message: 'Token ไม่ถูกต้อง' });
+  if (!token) return res.status(400).json({ message: 'ต้องระบุ token' });
 
   try {
     const hashed = hashToken(token);
@@ -437,7 +509,7 @@ exports.verifyEmail = async (req, res) => {
       .first();
 
     if (!user) {
-      return res.status(400).json({ message: 'Token ไม่ถูกต้องหรือหมดอายุ' });
+      return res.status(400).json({ message: 'token ไม่ถูกต้องหรือหมดอายุ' });
     }
 
     await db('customers').where({ id: user.id }).update({
@@ -449,46 +521,45 @@ exports.verifyEmail = async (req, res) => {
     return res.redirect(`${process.env.APP_BASE_URL}/verify/success`);
   } catch (err) {
     console.error('Error verifyEmail:', err);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาด' });
+    res.status(500).json({ message: 'ไม่สามารถยืนยันอีเมลได้' });
   }
 };
 
-// ลืมรหัสผ่าน: ขอ reset link
+// ขอรีเซ็ตรหัสผ่าน: ส่งลิงก์รีเซ็ตไปอีเมล
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: 'กรุณาระบุอีเมล' });
 
   try {
     const user = await db('customers').where({ email }).first();
-    if (!user) return res.status(404).json({ message: 'ไม่พบผู้ใช้งาน' });
+    if (!user) return res.status(404).json({ message: 'ไม่พบบัญชีผู้ใช้' });
 
-    const { rawToken, hashedToken } = generateResetToken();
-    const expires = new Date(Date.now() + 3600 * 1000); // 1 ชั่วโมง
+    const { rawToken, hashedToken, expiresAt } = generateResetToken();
 
     await db('customers')
       .where({ id: user.id })
-      .update({ reset_token: hashedToken, reset_token_expires: expires });
+      .update({ reset_token: hashedToken, reset_token_expires: expiresAt });
 
     const resetUrl = `${process.env.APP_BASE_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
     const subject = 'รีเซ็ตรหัสผ่าน ALShop';
     const html = `
       <p>คุณได้ร้องขอการรีเซ็ตรหัสผ่าน</p>
-      <p><a href="${resetUrl}" target="_blank">คลิกที่นี่เพื่อรีเซ็ตรหัสผ่าน</a></p>
-      <p>ลิงก์จะหมดอายุใน 1 ชั่วโมง</p>
+      <p><a href="${resetUrl}" target="_blank">คลิกลิงก์นี้เพื่อรีเซ็ตรหัสผ่านของคุณ</a></p>
+      <p>ลิงก์มีอายุ 1 ชั่วโมง</p>
     `;
 
     await sendEmail(email, subject, html);
-    res.json({ message: 'ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว กรุณาตรวจสอบอีเมลของคุณ' });
+    res.json({ message: 'ส่งลิงก์สำหรับรีเซ็ตรหัสผ่านไปที่อีเมลแล้ว' });
   } catch (err) {
     console.error('Error forgotPassword:', err);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาด' });
+    res.status(500).json({ message: 'ไม่สามารถดำเนินการได้' });
   }
 };
 
-// ตรวจสอบ token reset (ใช้ตอน frontend เปิดหน้า reset)
+// ตรวจสอบความถูกต้องของ token รีเซ็ต (ใช้ตอนหน้ารีเซ็ต)
 exports.verifyResetToken = async (req, res) => {
   const { token, email } = req.query;
-  if (!token || !email) return res.status(400).json({ message: 'ข้อมูลไม่ครบ' });
+  if (!token || !email) return res.status(400).json({ message: 'กรุณาระบุ token และ email' });
 
   try {
     const user = await db('customers').where({ email }).first();
@@ -498,21 +569,21 @@ exports.verifyResetToken = async (req, res) => {
 
     const valid = verifyHashedToken(token, user.reset_token);
     if (!valid || new Date() > user.reset_token_expires) {
-      return res.status(400).json({ message: 'Token ไม่ถูกต้องหรือหมดอายุ' });
+      return res.status(400).json({ message: 'token ไม่ถูกต้องหรือหมดอายุ' });
     }
 
-    res.json({ message: 'Token ใช้งานได้' });
+    res.json({ message: 'token ใช้งานได้' });
   } catch (err) {
     console.error('Error verifyResetToken:', err);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาด' });
+    res.status(500).json({ message: 'ไม่สามารถตรวจสอบ token ได้' });
   }
 };
 
-// รีเซ็ตรหัสผ่านใหม่
+// รีเซ็ตรหัสผ่านจริง
 exports.resetPassword = async (req, res) => {
   const { token, email, newPassword } = req.body;
   if (!token || !email || !newPassword) {
-    return res.status(400).json({ message: 'ข้อมูลไม่ครบ' });
+    return res.status(400).json({ message: 'กรุณาระบุ token, email และรหัสผ่านใหม่' });
   }
 
   try {
@@ -523,21 +594,23 @@ exports.resetPassword = async (req, res) => {
 
     const valid = verifyHashedToken(token, user.reset_token);
     if (!valid || new Date() > user.reset_token_expires) {
-      return res.status(400).json({ message: 'Token ไม่ถูกต้องหรือหมดอายุ' });
+      return res.status(400).json({ message: 'token ไม่ถูกต้องหรือหมดอายุ' });
     }
 
     const hashed = await bcrypt.hash(newPassword, 10);
 
-    await db('customers').where({ id: user.id }).update({
-      password: hashed,
-      reset_token: null,
-      reset_token_expires: null,
-      password_changed_at: new Date()
-    });
+    await db('customers')
+      .where({ id: user.id })
+      .update({
+        password: hashed,
+        reset_token: null,
+        reset_token_expires: null,
+        updated_at: db.fn.now(),
+      });
 
-    res.json({ message: 'รีเซ็ตรหัสผ่านเรียบร้อยแล้ว' });
+    res.json({ message: 'ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว' });
   } catch (err) {
     console.error('Error resetPassword:', err);
-    res.status(500).json({ message: 'เกิดข้อผิดพลาด' });
+    res.status(500).json({ message: 'ไม่สามารถรีเซ็ตรหัสผ่านได้' });
   }
 };

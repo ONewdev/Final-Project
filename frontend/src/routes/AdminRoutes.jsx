@@ -10,11 +10,9 @@ import AdminOrderDetail from "../pages/admin/OrderDetail";
 import PaymentCheck from "../pages/admin/PaymentCheck"; 
 import ChatAdmin from "../pages/admin/ChatAdmin"; 
 import Contact from "../pages/admin/Contact";
-import Report from "../pages/admin/Report";
-import ReportOrder from "../pages/admin/ReportOrder";
-import ReportSales from "../pages/admin/ReportSales";
-import ReportProfit from "../pages/admin/ReportProfit";
+import IncomeExpensePage from "../pages/admin/IncomeExpensePage";
 import Inbox from "../pages/admin/Inbox";
+import MaterialsAdmin from "../pages/admin/MaterialsAdmin";
 import OrdersCustom from "../pages/admin/OrdersCustom"; 
 import Login from "../pages/admin/Login";
 import PrivateRoute from "../utils/PrivateRoute";
@@ -38,12 +36,10 @@ export default function AdminRoutes() {
           <Route path="payment-check" element={<PaymentCheck />} /> 
           <Route path="chat" element={<ChatAdmin />} /> 
           <Route path="inbox" element={<Inbox />} />
+          <Route path="materials" element={<MaterialsAdmin />} />
           <Route path="contact" element={<Contact />} />
           <Route path="custom-orders" element={<OrdersCustom />} />
-          <Route path="report" element={<Report />} />
-          <Route path="report/order" element={<ReportOrder />} />
-          <Route path="report/sales" element={<ReportSales />} />
-          <Route path="report/profit" element={<ReportProfit />} />
+          <Route path="income-expense" element={<IncomeExpensePage />} />
         </Route>
       </Route>
     </Routes>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import Swal from 'sweetalert2';
+import AddressManager from '../../components/AddressManager';
 
 function Profile() {
   const { user, setUser } = useAuth();
@@ -69,24 +70,124 @@ function Profile() {
 
   // districts
   useEffect(() => {
-    if (form.province_id) {
-      fetch(`${host}/api/customers/districts?province_id=${form.province_id}`)
-        .then(res => res.json()).then(setDistricts);
-    } else {
-      setDistricts([]);
-      setForm(f => ({ ...f, district_id: '', subdistrict_id: '' }));
-    }
-  }, [form.province_id, host]);
+    let cancelled = false;
 
+    const loadDistricts = async () => {
+      if (!form.province_id) {
+        setDistricts([]);
+        setForm((prev) => (
+          prev.district_id || prev.subdistrict_id || prev.postal_code
+            ? { ...prev, district_id: '', subdistrict_id: '', postal_code: '' }
+            : prev
+        ));
+        return;
+      }
+
+      try {
+        const response = await fetch(`${host}/api/customers/districts?province_id=${form.province_id}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch districts: ${response.status}`);
+        }
+
+        const payload = await response.json();
+        if (cancelled) return;
+
+        const options = Array.isArray(payload) ? payload : [];
+        setDistricts(options);
+
+        if (!options.length) {
+          setForm((prev) => (
+            prev.district_id || prev.subdistrict_id || prev.postal_code
+              ? { ...prev, district_id: '', subdistrict_id: '', postal_code: '' }
+              : prev
+          ));
+          return;
+        }
+
+        if (!options.some((item) => String(item.id) === String(form.district_id))) {
+          const [firstOption] = options;
+          setForm((prev) => ({
+            ...prev,
+            district_id: String(firstOption.id),
+            subdistrict_id: '',
+            postal_code: '',
+          }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load districts:', error);
+          setDistricts([]);
+        }
+      }
+    };
+
+    loadDistricts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.province_id, host, form.district_id]);
   // subdistricts
   useEffect(() => {
-    if (form.district_id) {
-      fetch(`${host}/api/customers/subdistricts?district_id=${form.district_id}`)
-        .then(res => res.json()).then(setSubdistricts);
-    } else {
-      setSubdistricts([]);
-      setForm(f => ({ ...f, subdistrict_id: '' }));
-    }
+    let cancelled = false;
+
+    const loadSubdistricts = async () => {
+      if (!form.district_id) {
+        setSubdistricts([]);
+        setForm((prev) => (
+          prev.subdistrict_id || prev.postal_code
+            ? { ...prev, subdistrict_id: '', postal_code: '' }
+            : prev
+        ));
+        return;
+      }
+
+      try {
+        const response = await fetch(`${host}/api/customers/subdistricts?district_id=${form.district_id}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch subdistricts: ${response.status}`);
+        }
+
+        const payload = await response.json();
+        if (cancelled) return;
+
+        const options = Array.isArray(payload) ? payload : [];
+        setSubdistricts(options);
+
+        if (!options.length) {
+          setForm((prev) => (prev.subdistrict_id || prev.postal_code ? { ...prev, subdistrict_id: '', postal_code: '' } : prev));
+          return;
+        }
+
+        setForm((prev) => {
+          const selected = options.find((item) => String(item.id) === String(prev.subdistrict_id));
+          if (selected) {
+            if (selected.postal_code && selected.postal_code !== prev.postal_code) {
+              return { ...prev, postal_code: selected.postal_code };
+            }
+            return prev;
+          }
+
+          const [firstOption] = options;
+          return {
+            ...prev,
+            subdistrict_id: String(firstOption.id),
+            postal_code: firstOption.postal_code ?? prev.postal_code ?? '',
+          };
+        });
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load subdistricts:', error);
+          setSubdistricts([]);
+        }
+      }
+    };
+
+    loadSubdistricts();
+
+    return () => {
+      cancelled = true;
+    };
   }, [form.district_id, host]);
 
   const handleChange = (e) => {
@@ -99,18 +200,38 @@ function Profile() {
     }
 
     if (name === 'province_id') {
-      setForm((prev) => ({ ...prev, province_id: value, district_id: '', subdistrict_id: '' }));
+      setForm((prev) => ({
+        ...prev,
+        province_id: value,
+        district_id: '',
+        subdistrict_id: '',
+        postal_code: '',
+      }));
       return;
     }
     if (name === 'district_id') {
-      setForm((prev) => ({ ...prev, district_id: value, subdistrict_id: '' }));
+      setForm((prev) => ({
+        ...prev,
+        district_id: value,
+        subdistrict_id: '',
+        postal_code: '',
+      }));
       return;
     }
     if (name === 'subdistrict_id') {
-      setForm((prev) => ({ ...prev, subdistrict_id: value }));
+      setForm((prev) => {
+        const next = {
+          ...prev,
+          subdistrict_id: value,
+        };
+        const matched = subdistricts.find((item) => String(item.id) === String(value));
+        if (matched?.postal_code) {
+          next.postal_code = matched.postal_code;
+        }
+        return next;
+      });
       return;
     }
-
     if (name === 'profile_picture' && files?.length > 0) {
       const file = files[0];
       const allowed = ['image/jpeg', 'image/png', 'image/gif'];
@@ -454,6 +575,8 @@ function Profile() {
               </button>
             </div>
           </form>
+
+          <AddressManager userId={userId} host={host} defaultRecipient={form.name} defaultPhone={form.phone} />
         </div>
       </div>
 
@@ -507,3 +630,7 @@ function Profile() {
 }
 
 export default Profile;
+
+
+
+

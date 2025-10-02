@@ -128,6 +128,13 @@ function Category() {
 
   const columns = [
     {
+      name: 'ลำดับ',
+      width: '70px',
+      cell: (row, index) => <span className="font-kanit">{index + 1}</span>,
+      center: true,
+    },
+    { name: 'ชื่อหมวดหมู่', selector: (row) => row.category_name },
+    {
       name: 'รูปภาพ',
       cell: (row) =>
         row.image_url ? (
@@ -141,7 +148,6 @@ function Category() {
         ),
       width: '100px',
     },
-    { name: 'ชื่อหมวดหมู่', selector: (row) => row.category_name },
     {
       name: 'Actions',
       cell: (row) => (

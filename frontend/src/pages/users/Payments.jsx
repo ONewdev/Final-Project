@@ -4,6 +4,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 const host = import.meta.env.VITE_HOST;
 
 function Payments() {
+  const [contactInfo, setContactInfo] = useState(null);
+
+  useEffect(() => {
+    fetch(`${host}/api/contact`)
+      .then((res) => res.json())
+      .then((data) => setContactInfo(data))
+      .catch(() => setContactInfo(null));
+  }, [host]);
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -72,20 +80,20 @@ function Payments() {
       });
       const data = await res.json();
       if (res.ok) {
-        // Update order status to shipped after successful payment
+        // Update order status to processing after successful payment
         if (form.order_id) {
           try {
             await fetch(`${host}/api/orders/${form.order_id}/status`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: 'shipped' }),
+              body: JSON.stringify({ status: 'processing' }),
               credentials: 'include',
             });
           } catch {}
         }
         setSuccessMsg('แจ้งชำระเงินสำเร็จ');
         setTimeout(() => {
-          navigate('/users/shipped');
+          navigate('/users/processing');
         }, 800);
         setForm({
           order_id: '',
@@ -110,12 +118,16 @@ function Payments() {
         {/* QR Code สำหรับโอนเงิน */}
         <div className="mb-8 flex flex-col items-center">
           <div className="bg-gray-100 rounded-xl p-4 shadow-sm mb-2">
-            <img
-              src='/images/qr-payment.png'
-              alt="QR Code สำหรับโอนเงิน"
-              className="w-52 h-52 object-contain rounded-lg border border-gray-200"
-              onError={e => { e.target.style.display = 'none'; }}
-            />
+            {contactInfo?.qr_image ? (
+              <img
+                src={contactInfo.qr_image.startsWith('/') ? `${host}${contactInfo.qr_image}` : contactInfo.qr_image}
+                alt="QR Code สำหรับโอนเงิน"
+                className="w-52 h-52 object-contain rounded-lg border border-gray-200"
+                onError={e => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <span className="text-gray-400 text-sm">ยังไม่มี QR Code สำหรับโอนเงิน</span>
+            )}
           </div>
           <div className="text-gray-500 text-sm">สแกนเพื่อโอนเงินผ่าน Mobile Banking</div>
         </div>

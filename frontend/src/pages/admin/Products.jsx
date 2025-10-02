@@ -29,7 +29,6 @@ const Modal = React.memo(({ show, onHide, children, title }) => {
   );
 });
 
-
 function Products() {
   const [products, setProducts] = useState([]);
 
@@ -54,7 +53,6 @@ function Products() {
     image: null,
     status: 'active',
   });
-  
 
   const host = import.meta.env.VITE_HOST || 'http://localhost:3000';
 
@@ -86,9 +84,7 @@ function Products() {
       }
     };
     fetchColors();
-
   }, [host]);
-
 
   const filteredProducts = useMemo(() => {
     if (searchTerm.trim() === '') return products;
@@ -98,8 +94,6 @@ function Products() {
       product.category_name?.toString().toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [products, searchTerm]);
-
-
 
   const fetchProducts = async () => {
     try {
@@ -119,12 +113,9 @@ function Products() {
     }
   };
 
-  
-
   const handleEdit = (id) => {
     const product = products.find((p) => p.id === id);
     if (product) {
-      console.log('Edit product:', product); // debug log
       setEditProduct({ ...product });
       setShowEditModal(true);
     }
@@ -138,12 +129,12 @@ function Products() {
     }
   };
 
+  const removeCommas = (value) => value.replace(/,/g, '');
+
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    // ตรวจสอบถ้าเป็นช่อง 'price' ให้ลบคอมม่าออกก่อน
     const updatedValue = name === 'price' ? removeCommas(value) : value;
     setEditProduct((prev) => ({ ...prev, [name]: updatedValue }));
-    console.log(editProduct)
   };
 
   const handleEditSubmit = async (e) => {
@@ -168,8 +159,8 @@ function Products() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json(); // หรือ response.text()
-        console.error('Server validation error:', errorData); 
+        const errorData = await response.json();
+        console.error('Server validation error:', errorData);
         throw new Error('Failed to update product');
       }
 
@@ -187,9 +178,8 @@ function Products() {
     }
   };
 
-   const handleAddChange = (e) => {
+  const handleAddChange = (e) => {
     const { name, value } = e.target;
-    // ตรวจสอบถ้าเป็นช่อง 'price' ให้ลบคอมม่าออกก่อน
     const updatedValue = name === 'price' ? removeCommas(value) : value;
     setNewProduct((prev) => ({ ...prev, [name]: updatedValue }));
   };
@@ -223,7 +213,6 @@ function Products() {
     resetNewProduct();
   }, [resetNewProduct]);
 
-
   const handleAddSubmit = async (e) => {
     e.preventDefault();
 
@@ -236,6 +225,9 @@ function Products() {
       formData.append('price', newProduct.price);
       formData.append('quantity', newProduct.quantity);
       formData.append('status', newProduct.status);
+      // หมายเหตุ: ถ้าต้องการส่ง size/color ไป backend ด้วย ให้ uncomment บรรทัดล่าง
+      // formData.append('size', newProduct.size);
+      // formData.append('color', newProduct.color);
 
       if (newProduct.image) {
         formData.append('image', newProduct.image);
@@ -247,8 +239,8 @@ function Products() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json(); // หรือ response.text()
-        console.error('Server validation error:', errorData); 
+        const errorData = await response.json();
+        console.error('Server validation error:', errorData);
         throw new Error('Failed to add product');
       }
 
@@ -266,21 +258,12 @@ function Products() {
 
   const formatNumberWithCommas = (value) => {
     if (!value) return '';
-    // แปลงเป็น string
     const str = value.toString();
-    // ลบทุกอย่างที่ไม่ใช่ตัวเลขกับจุดทศนิยมออก
     const cleaned = str.replace(/[^\d.]/g, '');
-    // แยกจุดทศนิยมออก
     const parts = cleaned.split('.');
-    // ใส่ comma ที่หลักพันของจำนวนเต็ม
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    // รวมกลับ
     return parts.join('.');
   };
-
-  const removeCommas = (value) => value.replace(/,/g, '');
-
-
 
   const formatPrice = (price) => {
     const numPrice = parseFloat(price);
@@ -504,11 +487,11 @@ function Products() {
             <div className="text-center py-12">
               <FaImage className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <p className="text-gray-500 text-lg">ไม่มีข้อมูลสินค้า</p>
-              
             </div>
           )}
         </div>
 
+        {/* ===== Modal: Edit product (re-ordered fields) ===== */}
         <Modal
           show={showEditModal}
           onHide={() => {
@@ -518,34 +501,28 @@ function Products() {
           title="แก้ไขข้อมูลสินค้า"
         >
           <form onSubmit={handleEditSubmit} className="space-y-4">
+            {/* 1) หมวดหมู่ */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ขนาด (size)</label>
-              <input
-                type="text"
-                name="size"
-                value={editProduct?.size || ''}
-                onChange={handleEditChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="เช่น 120x180 cm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">สี (color)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                หมวดหมู่ <span className="text-red-500">*</span>
+              </label>
               <select
-                name="color"
-                value={editProduct?.color || ''}
+                name="category_id"
+                value={editProduct?.category_id || ''}
                 onChange={handleEditChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
               >
-                <option value="">-- เลือกสี --</option>
-                <option value="ขาว">ขาว</option>
-                <option value="ดำ">ดำ</option>
-                <option value="เงิน">เงิน</option>
-                <option value="อบขาว">อบขาว</option>
-                <option value="ชา">ชา</option>
-                <option value="ลายไม้จามจุรี">ลายไม้จามจุรี</option>
+                <option value="">-- เลือกหมวดหมู่ --</option>
+                {categories.map(cat => (
+                  <option key={cat.category_id} value={cat.category_id}>
+                    {cat.category_name}
+                  </option>
+                ))}
               </select>
             </div>
+
+            {/* 2) รหัสสินค้า */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 รหัสสินค้า <span className="text-red-500">*</span>
@@ -559,6 +536,8 @@ function Products() {
                 required
               />
             </div>
+
+            {/* 3) ชื่อสินค้า */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 ชื่อสินค้า <span className="text-red-500">*</span>
@@ -573,34 +552,7 @@ function Products() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                รายละเอียดสินค้า
-              </label>
-              <textarea
-                name="description"
-                value={editProduct?.description || ''}
-                onChange={handleEditChange}
-                rows="3"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="กรอกรายละเอียดสินค้า..."
-              />
-            </div>
-
-            <select
-              name="category_id"
-              value={editProduct?.category_id || ''}
-              onChange={handleEditChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">-- เลือกหมวดหมู่ --</option>
-              {categories.map(cat => (
-                <option key={cat.category_id} value={cat.category_id}>
-                  {cat.category_name}
-                </option>
-              ))}
-            </select>
-
+            {/* 4) ราคา & 5) จำนวน */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -633,25 +585,54 @@ function Products() {
               </div>
             </div>
 
+            {/* 6) สี */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                สถานะ
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">สี (color)</label>
               <select
-                name="status"
-                value={editProduct?.status || 'active'}
+                name="color"
+                value={editProduct?.color || ''}
                 onChange={handleEditChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="active">แสดง</option>
-                <option value="inactive">ไม่แสดง</option>
+                <option value="">-- เลือกสี --</option>
+                <option value="ขาว">ขาว</option>
+                <option value="ดำ">ดำ</option>
+                <option value="เงิน">เงิน</option>
+                <option value="อบขาว">อบขาว</option>
+                <option value="ชา">ชา</option>
+                <option value="ลายไม้จามจุรี">ลายไม้จามจุรี</option>
               </select>
             </div>
 
+            {/* 7) ขนาด */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                รูปภาพ
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ขนาด (size)</label>
+              <input
+                type="text"
+                name="size"
+                value={editProduct?.size || ''}
+                onChange={handleEditChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="เช่น 120x180 cm"
+              />
+            </div>
+
+            {/* 8) รายละเอียด */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">รายละเอียดสินค้า</label>
+              <textarea
+                name="description"
+                value={editProduct?.description || ''}
+                onChange={handleEditChange}
+                rows="3"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="กรอกรายละเอียดสินค้า..."
+              />
+            </div>
+
+            {/* 9) รูปภาพ */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">รูปภาพ</label>
               <input
                 type="file"
                 name="image"
@@ -668,6 +649,20 @@ function Products() {
                   />
                 </div>
               )}
+            </div>
+
+            {/* 10) สถานะ */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
+              <select
+                name="status"
+                value={editProduct?.status || 'active'}
+                onChange={handleEditChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="active">แสดง</option>
+                <option value="inactive">ไม่แสดง</option>
+              </select>
             </div>
 
             <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -691,6 +686,7 @@ function Products() {
           </form>
         </Modal>
 
+        {/* ===== Modal: View details (unchanged) ===== */}
         <Modal
           show={showDetailModal}
           onHide={() => {
@@ -741,14 +737,14 @@ function Products() {
                         {detailProduct.status === 'active' ? 'แสดง' : 'ไม่แสดง'}
                       </span>
                     </div>
-                     <div>
-                       <p className="text-xs text-gray-500">ขนาด (size)</p>
-                       <p className="font-medium text-gray-900">{detailProduct.size || '-'}</p>
-                     </div>
-                     <div>
-                       <p className="text-xs text-gray-500">สี (color)</p>
-                       <p className="font-medium text-gray-900">{detailProduct.color || '-'}</p>
-                     </div>
+                    <div>
+                      <p className="text-xs text-gray-500">ขนาด (size)</p>
+                      <p className="font-medium text-gray-900">{detailProduct.size || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">สี (color)</p>
+                      <p className="font-medium text-gray-900">{detailProduct.color || '-'}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -774,92 +770,65 @@ function Products() {
           )}
         </Modal>
 
+        {/* ===== Modal: Add product (re-ordered fields) ===== */}
         <Modal
           show={showAddModal}
           onHide={closeAddModal}
           title="เพิ่มสินค้าใหม่"
         >
           <form onSubmit={handleAddSubmit} className="space-y-4">
+            {/* 1) หมวดหมู่ */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ขนาด (size)</label>
-              <input
-                type="text"
-                name="size"
-                placeholder="เช่น 120x180 cm"
-                value={newProduct.size}
-                onChange={handleAddChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">สี (color)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                หมวดหมู่ <span className="text-red-500">*</span>
+              </label>
               <select
-                name="color"
-                value={newProduct.color}
+                name="category_id"
+                value={newProduct.category_id}
                 onChange={handleAddChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                required
               >
-                <option value="">-- เลือกสี --</option>
-                {colorOptions.map((color) => (
-                  <option key={color} value={color}>{color}</option>
+                <option value="">-- เลือกหมวดหมู่ --</option>
+                {categories.map(cat => (
+                  <option key={cat.category_id} value={cat.category_id}>
+                    {cat.category_name}
+                  </option>
                 ))}
               </select>
             </div>
+
+            {/* 2) รหัสสินค้า */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 รหัสสินค้า <span className="text-red-500">*</span>
               </label>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">สี (color)</label>
-                <select
-                  name="color"
-                  value={editProduct?.color || ''}
-                  onChange={handleEditChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">-- เลือกสี --</option>
-                  {colorOptions.map((color) => (
-                    <option key={color} value={color}>{color}</option>
-                  ))}
-                </select>
-              </div>
+              <input
+                name="product_code"
+                placeholder="กรอกรหัสสินค้า"
+                value={newProduct.product_code}
+                onChange={handleAddChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            {/* 3) ชื่อสินค้า */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ชื่อสินค้า <span className="text-red-500">*</span>
+              </label>
+              <input
+                name="name"
                 placeholder="กรอกชื่อสินค้า"
                 value={newProduct.name}
                 onChange={handleAddChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 required
-              
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                รายละเอียดสินค้า
-              </label>
-              <textarea
-                name="description"
-                placeholder="กรอกรายละเอียดสินค้า"
-                value={newProduct.description}
-                onChange={handleAddChange}
-                rows="3"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
 
-            <select
-              name="category_id"
-              value={newProduct.category_id}
-              onChange={handleAddChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="">-- เลือกหมวดหมู่ --</option>
-              {categories.map(cat => (
-                <option key={cat.category_id} value={cat.category_id}>
-                  {cat.category_name}
-                </option>
-              ))}
-            </select>
-
-
+            {/* 4) ราคา & 5) จำนวน */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -892,10 +861,53 @@ function Products() {
               </div>
             </div>
 
+            {/* 6) สี (options จาก backend) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">สี (color)</label>
+              <select
+                name="color"
+                value={newProduct.color}
+                onChange={handleAddChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="">-- เลือกสี --</option>
+                {colorOptions.map((color) => (
+                  <option key={color} value={color}>{color}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 7) ขนาด */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ขนาด (size)</label>
+              <input
+                type="text"
+                name="size"
+                placeholder="เช่น 120x180 cm"
+                value={newProduct.size}
+                onChange={handleAddChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* 8) รายละเอียด */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                รูปภาพ
+                รายละเอียดสินค้า
               </label>
+              <textarea
+                name="description"
+                placeholder="กรอกรายละเอียดสินค้า"
+                value={newProduct.description}
+                onChange={handleAddChange}
+                rows="3"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* 9) รูปภาพ */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">รูปภาพ</label>
               <input
                 type="file"
                 name="image"
@@ -903,6 +915,20 @@ function Products() {
                 accept="image/*"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
+            </div>
+
+            {/* 10) สถานะ */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
+              <select
+                name="status"
+                value={newProduct.status}
+                onChange={handleAddChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="active">แสดง</option>
+                <option value="inactive">ไม่แสดง</option>
+              </select>
             </div>
 
             <div className="flex justify-end space-x-3 pt-4 border-t">

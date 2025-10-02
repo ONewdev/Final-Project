@@ -20,8 +20,9 @@ const chatRoutes = require('./routes/chat');
 const inboxRoutes = require('./routes/inbox');
 const customOrderRoutes = require('./routes/customOrders');
 const notificationRouter = require('./routes/notification');
-const reportsRoutes = require('./routes/reports');
-
+const ledgerRoutes = require('./routes/ledger');
+const shippingRoutes = require('./routes/shipping');
+const materialsRoutes = require('./routes/materials');
 
 
 
@@ -54,16 +55,19 @@ app.use('/api/contact', contactRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/categories', categoryRouter); 
-app.use('/api/orders', ordersRouter);  
+app.use('/api/orders', ordersRouter);
 app.use('/api/interactions', interactionRoutes); 
 app.use('/api/stats', statsRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/messages', chatRoutes);
 app.use('/api/inbox', inboxRoutes);
-app.use('/api/custom', customOrderRoutes);
+app.use('/api/custom-orders', customOrderRoutes);
 app.use('/api/colors', colorsRouter);
-app.use('/api/reports', reportsRoutes);
+app.use('/api', shippingRoutes);
+app.use('/api', ledgerRoutes);
+app.use('/api/materials', materialsRoutes);
+
 
 // Serve static files (ภาพ) จาก public/uploads
 // (duplicate uploads static removed)
@@ -93,3 +97,4 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
 });
+

@@ -14,6 +14,12 @@ export default function SidebarAdmin() {
     orders: false,
   });
   const [chatUnread, setChatUnread] = useState(0);
+  const [inboxUnread, setInboxUnread] = useState(0);
+  const [ordersUnread, setOrdersUnread] = useState(0);
+  const [customOrdersUnread, setCustomOrdersUnread] = useState(0);
+  const [paymentCheckUnread, setPaymentCheckUnread] = useState(0);
+
+
 
   useEffect(() => {
     if (!document.getElementById('kanit-font')) {
@@ -40,7 +46,7 @@ export default function SidebarAdmin() {
     };
     window.addEventListener('adminUnreadChanged', onAdminUnreadChanged);
     return () => {
-      try { socket.disconnect(); } catch {}
+      try { socket.disconnect(); } catch { }
       window.removeEventListener('adminUnreadChanged', onAdminUnreadChanged);
     };
   }, [location.pathname]);
@@ -50,6 +56,109 @@ export default function SidebarAdmin() {
       setChatUnread(0);
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+   
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+    socket.on('inbox message', (msg) => {
+      setInboxUnread((prev) => prev + 1);
+    });
+    
+    return () => {
+      try { socket.disconnect(); } catch { }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (location.pathname === '/admin/inbox') {
+      setInboxUnread(0); // อ่านแล้ว
+    }
+  }, [location.pathname]);
+
+  // === Orders (สั่งซื้อทั่วไป) ===
+useEffect(() => {
+  const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+
+  // เมื่อมีคำสั่งซื้อใหม่
+  socket.on('order:new', () => {
+    // ถ้าไม่ได้อยู่หน้า orders ค่อยเพิ่มตัวเลข
+    if (location.pathname !== '/admin/orders') {
+      setOrdersUnread((prev) => prev + 1);
+    }
+  });
+
+  // ถ้าเซิร์ฟเวอร์มีการส่งค่า count ล่าสุดมาเป็นก้อน
+  socket.on('orders:unread:set', (count) => {
+    setOrdersUnread(Number(count) || 0);
+  });
+
+  return () => {
+    try { socket.disconnect(); } catch {}
+  };
+}, [location.pathname]);
+
+useEffect(() => {
+  if (location.pathname === '/admin/orders') {
+    setOrdersUnread(0); // อ่านแล้ว
+    // ถ้ามี API mark-as-read ให้เรียกที่นี่
+    // fetch(`${API}/api/admin/unread/orders/mark-read`, { method: 'POST', headers: {...} })
+  }
+}, [location.pathname]);
+
+// === Custom Orders (คำสั่งทำสินค้า) ===
+useEffect(() => {
+  const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+
+  socket.on('customOrder:new', () => {
+    if (location.pathname !== '/admin/custom-orders') {
+      setCustomOrdersUnread((prev) => prev + 1);
+    }
+  });
+
+  socket.on('customOrders:unread:set', (count) => {
+    setCustomOrdersUnread(Number(count) || 0);
+  });
+
+  return () => {
+    try { socket.disconnect(); } catch {}
+  };
+}, [location.pathname]);
+
+useEffect(() => {
+  if (location.pathname === '/admin/custom-orders') {
+    setCustomOrdersUnread(0); // อ่านแล้ว
+    // fetch(`${API}/api/admin/unread/custom-orders/mark-read`, { method: 'POST', headers: {...} })
+  }
+}, [location.pathname]);
+
+// === Payment Check (ตรวจสลิป/การชำระเงิน) ===
+useEffect(() => {
+  const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+
+  socket.on('payment:submitted', () => {
+    if (location.pathname !== '/admin/payment-check') {
+      setPaymentCheckUnread((prev) => prev + 1);
+    }
+  });
+
+  socket.on('paymentCheck:unread:set', (count) => {
+    setPaymentCheckUnread(Number(count) || 0);
+  });
+
+  return () => {
+    try { socket.disconnect(); } catch {}
+  };
+}, [location.pathname]);
+
+useEffect(() => {
+  if (location.pathname === '/admin/payment-check') {
+    setPaymentCheckUnread(0); // อ่านแล้ว
+    // fetch(`${API}/api/admin/unread/payment-check/mark-read`, { method: 'POST', headers: {...} })
+  }
+}, [location.pathname]);
+
+
+    
 
   const handleLogout = () => {
     Swal.fire({
@@ -137,13 +246,16 @@ export default function SidebarAdmin() {
                 <Link to="/admin/chat" className={`nav-link text-white ps-4 ${isActive('/admin/chat') ? 'active' : ''}`}>
                   💬 ข้อความลูกค้า
                   {chatUnread > 0 && (
-                  <span className="badge bg-danger ms-2">{chatUnread}</span>
-                )}
+                    <span className="badge bg-danger ms-2">{chatUnread}</span>
+                  )}
                 </Link>
               </li>
               <li>
                 <Link to="/admin/inbox" className={`nav-link text-white ps-4 ${isActive('/admin/inbox') ? 'active' : ''}`}>
                   📥 กล่องข้อความ
+                  {inboxUnread > 0 && (
+                    <span className="badge bg-danger ms-2">{inboxUnread}</span>
+                  )}
                 </Link>
               </li>
             </ul>
@@ -161,9 +273,14 @@ export default function SidebarAdmin() {
                 </Link>
               </li>
               <li>
-                <Link to="/admin/categories" className={`nav-link text-white ps-4 ${isActive('/admin/categories') ? 'active' : ''}`}>
+                 <Link to="/admin/categories" className={`nav-link text-white ps-4 ${isActive('/admin/categories') ? 'active' : ''}`}>
                   🗂️ หมวดหมู่สินค้า
-                </Link>
+               </Link>
+              </li>
+              <li>
+                 <Link to="/admin/materials" className={`nav-link text-white ps-4 ${isActive('/admin/materials') ? 'active' : ''}`}>
+                   หมวดหมู่สินค้า
+               </Link>
               </li>
             </ul>
           )}
@@ -175,18 +292,27 @@ export default function SidebarAdmin() {
           {openDropdown.orders && (
             <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
               <li>
-                <Link to="/admin/orders" className={`nav-link text-white ps-4 ${isActive('/admin/orders') ? 'active' : ''}`}>
+                <Link to="/admin/orders" className={`nav-link text-white ps-4 ${isActive('/admin/orders') ? 'active' : ''}`}> 
                   🛒 จัดการคำสั่งซื้อ
+                  {ordersUnread > 0 && (
+                    <span className="badge bg-danger ms-2">{ordersUnread}</span>
+                  )}
                 </Link>
               </li>
               <li>
-                <Link to="/admin/custom-orders" className={`nav-link text-white ps-4 ${isActive('/admin/custom-orders') ? 'active' : ''}`}>
+                <Link to="/admin/custom-orders" className={`nav-link text-white ps-4 ${isActive('/admin/custom-orders') ? 'active' : ''}`}> 
                   📝 คำสั่งทำสินค้า
+                  {customOrdersUnread > 0 && (
+                    <span className="badge bg-danger ms-2">{customOrdersUnread}</span>
+                  )}
                 </Link>
               </li>
               <li>
-                <Link to="/admin/payment-check" className={`nav-link text-white ps-4 ${isActive('/admin/payment-check') ? 'active' : ''}`}>
+                <Link to="/admin/payment-check" className={`nav-link text-white ps-4 ${isActive('/admin/payment-check') ? 'active' : ''}`}> 
                   💳 ตรวจสอบการชำระเงิน
+                  {paymentCheckUnread > 0 && (
+                    <span className="badge bg-danger ms-2">{paymentCheckUnread}</span>
+                  )}
                 </Link>
               </li>
             </ul>
@@ -194,21 +320,15 @@ export default function SidebarAdmin() {
         </li>
         {/* จัดการข้อมูลร้านค้า */}
         <li className="nav-item">
-          
-              <DropdownToggle label="รายงาน" icon="📊" name="reports" />
-                {openDropdown.reports && (
-                  <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
-                    <li>
-                      <Link to="/admin/report/sales" className={`nav-link text-white ps-4 ${isActive('/admin/report/sales') ? 'active' : ''}`}>📊 รายงานยอดขาย</Link>
-                    </li>
-                   <li>
-                      <Link to="/admin/report/order" className={`nav-link text-white ps-4 ${isActive('/admin/report/order') ? 'active' : ''}`}>📑 รายงานคำสั่งซื้อ</Link>
-                  </li>
-                    <li>
-                      <Link to="/admin/report/profit" className={`nav-link text-white ps-4 ${isActive('/admin/report/profit') ? 'active' : ''}`}>📈 รายงานกำไร</Link>
-                    </li>
-                  </ul>
-                )}
+          <DropdownToggle label="รายงาน" icon="📊" name="reports" />
+          {openDropdown.reports && (
+            <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
+
+              <li>
+                <Link to="/admin/income-expense" className={`nav-link text-white ps-4 ${isActive('/admin/income-expense') ? 'active' : ''}`}>💰 รายรับ-รายจ่าย</Link>
+              </li>
+            </ul>
+          )}
         </li>
         {/* อื่นๆ */}
         <li className="nav-item">

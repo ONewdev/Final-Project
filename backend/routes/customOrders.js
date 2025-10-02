@@ -2,10 +2,8 @@
 const express = require('express');
 const path = require('path');
 const multer = require('multer');
-
 const ctrl = require('../controllers/customOrdersController');
 const payCtrl = require('../controllers/customPaymentsController');
-
 const router = express.Router();
 
 /** ===================== Orders ===================== */

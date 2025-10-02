@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 
@@ -56,6 +56,32 @@ export default function AdminOrderDetail() {
     return `${host}${clean}`;
   };
 
+  // ✅ แปลงรหัส OR# สำหรับแสดงผล (ใช้ของจริงถ้ามี, ไม่งั้น fallback)
+  const getDisplayOrderCode = useCallback((o) => {
+    if (!o) return '';
+    if (o.order_code) return o.order_code;
+    const d = o.created_at ? new Date(o.created_at) : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const seq = String(o.id ?? 0).padStart(4, '0');
+    return `OR#${y}${m}${day}-${seq}`;
+  }, []);
+
+  const copyText = (text) => {
+    try {
+      navigator.clipboard?.writeText(text);
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'คัดลอกแล้ว',
+        showConfirmButton: false,
+        timer: 1200,
+      });
+    } catch {}
+  };
+
   // ===== fetch order =====
   const fetchOrder = async (signal) => {
     try {
@@ -98,7 +124,8 @@ export default function AdminOrderDetail() {
   // ===== actions (admin) =====
   const changeStatus = async (nextStatus, confirmText) => {
     if (!order) return;
-    const text = confirmText || `เปลี่ยนสถานะเป็น "${statusText(nextStatus)}" ?`;
+    const code = getDisplayOrderCode(order);
+    const text = confirmText || `เปลี่ยนสถานะเป็น "${statusText(nextStatus)}" สำหรับ ${code} ?`;
     const ok = await Swal.fire({
       title: 'ยืนยันการเปลี่ยนสถานะ',
       text,
@@ -163,14 +190,26 @@ export default function AdminOrderDetail() {
     );
   }
 
+  const displayCode = getDisplayOrderCode(order);
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-2xl font-bold text-green-700">
-              รายละเอียดคำสั่งซื้อ #{String(order.id).padStart(4, '0')}
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-green-700">
+                รายละเอียดคำสั่งซื้อ <span className="font-mono">{displayCode}</span>
+              </h2>
+              <button
+                className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                onClick={() => copyText(displayCode)}
+                title="คัดลอกรหัส"
+              >
+                คัดลอก
+              </button>
+              <span className="text-xs text-gray-400">#{String(order.id).padStart(4, '0')}</span>
+            </div>
             <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusClass(order.status)}`}>
               {statusText(order.status)}
             </span>
@@ -178,6 +217,10 @@ export default function AdminOrderDetail() {
 
           {/* ข้อมูลลูกค้า / จัดส่ง */}
           <div className="mb-6 grid md:grid-cols-2 gap-4 text-gray-700">
+            <div>
+              รหัสคำสั่งซื้อ:{' '}
+              <span className="font-semibold font-mono">{displayCode}</span>
+            </div>
             <div>วันที่สั่งซื้อ: <span className="font-semibold">{formatDateTimeTH(order.created_at)}</span></div>
             <div>เบอร์โทร: <span className="font-semibold">{order.phone || '-'}</span></div>
             <div>ชื่อลูกค้า: <span className="font-semibold">{order.customer_name || '-'}</span></div>
@@ -244,7 +287,6 @@ export default function AdminOrderDetail() {
                 </a>
               </div>
             )}
-            {/* ถ้ามี endpoint ออกใบเสร็จ/ใบกำกับภาษี */}
             {order.status === 'delivered' && (
               <div>
                 <a
@@ -261,7 +303,7 @@ export default function AdminOrderDetail() {
 
           {/* ปุ่มแอคชันแอดมิน */}
           <div className="mt-6 flex gap-2 flex-wrap">
-            {canApprove && (
+            {order?.status === 'pending' && (
               <button
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-semibold"
                 onClick={() => changeStatus('approved')}
@@ -269,7 +311,7 @@ export default function AdminOrderDetail() {
                 อนุมัติ/ชำระแล้ว
               </button>
             )}
-            {canShip && (
+            {order?.status === 'approved' && (
               <button
                 className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm font-semibold"
                 onClick={() => changeStatus('shipped')}
@@ -277,7 +319,7 @@ export default function AdminOrderDetail() {
                 จัดส่ง
               </button>
             )}
-            {canMarkDelivered && (
+            {order?.status === 'shipped' && (
               <button
                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-semibold"
                 onClick={() => changeStatus('delivered')}
@@ -285,10 +327,10 @@ export default function AdminOrderDetail() {
                 ยืนยันจัดส่งสำเร็จ
               </button>
             )}
-            {canCancel && (
+            {order && !['delivered', 'cancelled'].includes(order.status) && (
               <button
                 className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-semibold"
-                onClick={() => changeStatus('cancelled', 'ยกเลิกคำสั่งซื้อนี้หรือไม่?')}
+                onClick={() => changeStatus('cancelled', `ยกเลิกคำสั่งซื้อ ${displayCode} หรือไม่?`)}
               >
                 ยกเลิกคำสั่งซื้อ
               </button>

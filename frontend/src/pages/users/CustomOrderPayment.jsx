@@ -9,6 +9,14 @@ function useQuery() {
 }
 
 function CustomOrderPayment() {
+  const [contactInfo, setContactInfo] = useState(null);
+
+  useEffect(() => {
+    fetch(`${host}/api/contact`)
+      .then((res) => res.json())
+      .then((data) => setContactInfo(data))
+      .catch(() => setContactInfo(null));
+  }, [host]);
   const { id: paramId } = useParams();
   const query = useQuery();
   const navigate = useNavigate();
@@ -27,7 +35,7 @@ function CustomOrderPayment() {
       setLoading(false);
       return;
     }
-    fetch(`${host}/api/custom/orders/${id}`)
+    fetch(`${host}/api/custom-orders/orders/${id}`)
       .then(res => res.ok ? res.json() : Promise.reject())
       .then(data => {
         setOrder(data);
@@ -57,7 +65,7 @@ function CustomOrderPayment() {
     formData.append('amount', String(order?.price || ''));
     formData.append('customer_id', String(user.id));
     try {
-      const res = await fetch(`${host}/api/custom/orders/${id}/payments`, {
+      const res = await fetch(`${host}/api/custom-orders/orders/${id}/payments`, {
         method: 'POST',
         body: formData,
         credentials: 'include',
@@ -84,12 +92,16 @@ function CustomOrderPayment() {
       <div className="max-w-xl w-full p-6 bg-white rounded-lg shadow">
         <h2 className="text-2xl font-bold mb-4 text-green-700">อัปโหลดสลิปชำระเงิน ใบสั่งทำ #{order.id}</h2>
         <div className="mb-4">
-          <img
-            src='/images/qr-payment.png'
-            a 
-            className="w-52 h-52 object-contain rounded-lg border border-gray-200 mb-4 mx-auto"
-            onError={e => { e.target.style.display = 'none'; }}
-          />
+          {contactInfo?.qr_image ? (
+            <img
+              src={contactInfo.qr_image.startsWith('/') ? `${host}${contactInfo.qr_image}` : contactInfo.qr_image}
+              alt="QR Code สำหรับโอนเงิน"
+              className="w-52 h-52 object-contain rounded-lg border border-gray-200 mb-4 mx-auto"
+              onError={e => { e.target.style.display = 'none'; }}
+            />
+          ) : (
+            <span className="text-gray-400 text-sm block mb-4 mx-auto text-center">ยังไม่มี QR Code สำหรับโอนเงิน</span>
+          )}
           <div><span className="font-semibold">ประเภท:</span> {order.product_type}</div>
           <div><span className="font-semibold">ขนาด:</span> {order.width}x{order.height} {order.unit}</div>
           <div><span className="font-semibold">สี:</span> {order.color}</div>
