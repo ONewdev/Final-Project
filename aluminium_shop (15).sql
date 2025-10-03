@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Oct 02, 2025 at 04:36 PM
+-- Generation Time: Oct 03, 2025 at 02:20 PM
 -- Server version: 5.7.24
 -- PHP Version: 8.0.1
 
@@ -39,6 +39,21 @@ CREATE TABLE `admin` (
 
 INSERT INTO `admin` (`id`, `username`, `password`) VALUES
 (1, 'admin', 'admin');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `carts`
+--
+
+CREATE TABLE `carts` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `product_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL DEFAULT '1',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------
 
@@ -98,7 +113,7 @@ CREATE TABLE `contact` (
 --
 
 INSERT INTO `contact` (`name`, `tel`, `gmail`, `map`, `address`, `time`, `logo`, `qr_image`, `bank_account`, `bank_name`, `account_name`, `id`, `status`) VALUES
-('Aluglaue Pro', '099-999-9998', 'A&G@gmail.com', 'https://www.google.com/maps/embed?pb=!4v1752974298441!6m8!1m7!1s8mYw-Ou6n1GQUv1RwTxmsQ!2m2!1d20.36825582310125!2d99.87733385345288!3f247.06!4f-8.099999999999994!5f0.7820865974627469', '168/ 2', '08:00 - 16:00 น.', '', '', '-', '-', '-', 1, 1);
+('Aluglaue Pro', '099-999-9998', 'A&G@gmail.com', 'https://www.google.com/maps/embed?pb=!4v1752974298441!6m8!1m7!1s8mYw-Ou6n1GQUv1RwTxmsQ!2m2!1d20.36825582310125!2d99.87733385345288!3f247.06!4f-8.099999999999994!5f0.7820865974627469', '168/ 23', '08:00 - 16:00 น.', '', '/uploads/contact/1759468999815-645885040.png', '0000000', '10000000', 'test', 1, 1);
 
 -- --------------------------------------------------------
 
@@ -133,7 +148,7 @@ CREATE TABLE `customers` (
 --
 
 INSERT INTO `customers` (`id`, `email`, `password`, `name`, `created_at`, `updated_at`, `status`, `profile_picture`, `is_verified`, `verification_token`, `reset_token`, `reset_token_expires`, `phone`, `address`, `postal_code`, `subdistrict_id`, `district_id`, `province_id`, `last_seen_notifications_at`) VALUES
-(2, 'test@gmail.com', '$2b$10$8z.xBLdlYfFzT1dHhVR9uetRP6ilSTBj5KuMliRjS9fCcwX6UC2W2', 'test', '2025-06-21 09:12:09', '2025-10-02 09:30:18', 'active', '/uploads/profiles/1757515832713-389545290.png', 0, NULL, NULL, NULL, '099-999-9999', '11/1', '57000', 1, 32, 3, '2025-10-02 16:30:18'),
+(2, 'test@gmail.com', '$2b$10$8z.xBLdlYfFzT1dHhVR9uetRP6ilSTBj5KuMliRjS9fCcwX6UC2W2', 'test', '2025-06-21 09:12:09', '2025-10-03 04:58:42', 'active', '/uploads/profiles/1757515832713-389545290.png', 0, NULL, NULL, NULL, '099-999-9999', '11/1', '57000', 1, 32, 3, '2025-10-03 11:58:42'),
 (6, 'test2@gmail.com', '$2b$10$VvPYgDUQj1Dq.7dAhweMzOjtG/6YDokkquER3BymR1vktiu1g5iyK', 'test2', '2025-08-04 02:19:49', '2025-09-10 14:58:55', 'active', '/uploads/profiles/1757516334534-299931082.png', 0, NULL, NULL, NULL, '099-999-9999', '12/1', '', NULL, NULL, NULL, NULL),
 (7, 'test3@gmail.com', '$2b$10$yDk6tDhEyRGJ3HQKb2JDmOTke0cioR979POqOkrkBeR7mWqVtiCum', 'test3', '2025-09-04 10:57:26', '2025-09-05 14:23:52', 'active', '/uploads/profiles/1756983671988-205085063.png', 0, NULL, NULL, NULL, '011-111-1111', '21/2', '', NULL, NULL, NULL, NULL),
 (25, 'koy40199@gmail.com', '$2b$10$72j36sRlO0konnpUQR/.SOqc/QPjK5UbfMl3vimBE9vXJAN4AA9x6', 'nkk', '2025-09-26 03:51:50', '2025-09-29 13:37:52', 'active', NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2025-09-29 20:37:52');
@@ -166,8 +181,8 @@ CREATE TABLE `customer_addresses` (
 
 INSERT INTO `customer_addresses` (`id`, `customer_id`, `label`, `recipient_name`, `phone`, `address`, `postal_code`, `subdistrict_id`, `district_id`, `province_id`, `is_default`, `created_at`, `updated_at`) VALUES
 (1, 25, 'บ้าน', 'nkk', '11111111111', '11/1', '57000', 3, 32, 3, 1, '2025-09-26 11:07:05', '2025-09-26 12:01:03'),
-(2, 2, 'บ้าน', 'test', '099-999-9999', '11/1', '57000', 2, 32, 3, 1, '2025-09-27 22:22:15', '2025-09-29 15:53:26'),
-(3, 2, 'บ้าน', 'test', '099-999-9999', '11/2', '57100', 13, 32, 3, 0, '2025-09-29 15:52:51', '2025-09-29 15:53:26');
+(2, 2, 'บ้าน', 'test', '099-999-9999', '11/1', '57000', 2, 32, 3, 0, '2025-09-27 22:22:15', '2025-10-03 12:26:42'),
+(3, 2, 'บ้าน', 'test', '099-999-9999', '11/2', '57100', 13, 32, 3, 1, '2025-09-29 15:52:51', '2025-10-03 12:26:42');
 
 -- --------------------------------------------------------
 
@@ -446,9 +461,6 @@ CREATE TABLE `ledger_entries` (
   `unit_price` decimal(12,2) NOT NULL DEFAULT '0.00',
   `description` varchar(255) NOT NULL,
   `amount` decimal(12,2) NOT NULL,
-  `category_id` int(11) DEFAULT NULL,
-  `order_id` int(11) DEFAULT NULL,
-  `custom_order_id` int(11) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -457,13 +469,14 @@ CREATE TABLE `ledger_entries` (
 -- Dumping data for table `ledger_entries`
 --
 
-INSERT INTO `ledger_entries` (`id`, `entry_date`, `type`, `source`, `ref_no`, `code`, `name`, `qty`, `unit_price`, `description`, `amount`, `category_id`, `order_id`, `custom_order_id`, `created_at`, `updated_at`) VALUES
-(1, '2025-09-01', 'income', 'store', NULL, NULL, NULL, '1.00', '0.00', 'ขายหน้าร้าน', '5000.00', NULL, NULL, NULL, '2025-09-27 14:20:10', '2025-09-27 14:20:10'),
-(2, '2025-09-02', 'expense', 'store', NULL, NULL, NULL, '1.00', '0.00', 'ซื้อวัตถุดิบ', '-2000.00', NULL, NULL, NULL, '2025-09-27 14:20:10', '2025-09-27 14:20:10'),
-(3, '2025-09-28', 'income', 'online', NULL, NULL, NULL, '1.00', '0.00', 'ขายหน้าต่างได้ สามชุด', '9000.00', NULL, NULL, NULL, '2025-09-27 14:33:18', '2025-09-27 14:33:18'),
-(4, '2025-09-30', 'income', 'store', NULL, NULL, NULL, '1.00', '0.00', 'ขายหน้าต่างได้ สามชุด', '4500.00', NULL, NULL, NULL, '2025-09-29 21:13:43', '2025-09-29 21:13:43'),
-(5, '2025-09-30', 'expense', 'store', NULL, NULL, NULL, '1.00', '0.00', 'ค่าน้ำมัน', '-500.00', NULL, NULL, NULL, '2025-09-30 17:56:31', '2025-09-30 17:56:31'),
-(6, '2025-10-02', 'income', 'store', '10000', 'MAT001', 'เสากุญแจ', '1.00', '600.00', '-', '6.00', NULL, NULL, NULL, '2025-10-02 16:07:20', '2025-10-02 16:07:20');
+INSERT INTO `ledger_entries` (`id`, `entry_date`, `type`, `source`, `ref_no`, `code`, `name`, `qty`, `unit_price`, `description`, `amount`, `created_at`, `updated_at`) VALUES
+(1, '2025-09-01', 'income', 'store', NULL, NULL, NULL, '1.00', '0.00', 'ขายหน้าร้าน', '5000.00', '2025-09-27 14:20:10', '2025-09-27 14:20:10'),
+(2, '2025-09-02', 'expense', 'store', NULL, NULL, NULL, '1.00', '0.00', 'ซื้อวัตถุดิบ', '-2000.00', '2025-09-27 14:20:10', '2025-09-27 14:20:10'),
+(3, '2025-09-28', 'income', 'online', NULL, NULL, NULL, '1.00', '0.00', 'ขายหน้าต่างได้ สามชุด', '9000.00', '2025-09-27 14:33:18', '2025-09-27 14:33:18'),
+(4, '2025-09-30', 'income', 'store', NULL, NULL, NULL, '1.00', '0.00', 'ขายหน้าต่างได้ สามชุด', '4500.00', '2025-09-29 21:13:43', '2025-09-29 21:13:43'),
+(5, '2025-09-30', 'expense', 'store', NULL, NULL, NULL, '1.00', '0.00', 'ค่าน้ำมัน', '-500.00', '2025-09-30 17:56:31', '2025-09-30 17:56:31'),
+(6, '2025-10-02', 'income', 'store', '10000', 'MAT001', 'เสากุญแจ', '1.00', '600.00', '-', '6.00', '2025-10-02 16:07:20', '2025-10-02 16:07:20'),
+(7, '2025-10-03', 'income', 'store', '10000', 'MAT001', 'เสากุญแจ', '1.00', '600.00', '-', '6.00', '2025-10-03 12:34:11', '2025-10-03 12:34:11');
 
 -- --------------------------------------------------------
 
@@ -636,7 +649,9 @@ INSERT INTO `notifications` (`id`, `customer_id`, `type`, `title`, `message`, `c
 (108, 2, 'info', 'สร้างคำสั่งซื้อสำเร็จ', 'ออเดอร์ #41 ถูกสร้างเรียบร้อยแล้ว', '2025-09-29 20:49:22', 0, NULL),
 (109, 2, 'info', 'สร้างคำสั่งซื้อสำเร็จ', 'ออเดอร์ #42 ถูกสร้างเรียบร้อยแล้ว', '2025-09-29 20:55:10', 0, NULL),
 (110, 2, 'info', 'สร้างคำสั่งซื้อสำเร็จ', 'ออเดอร์ #43 ถูกสร้างเรียบร้อยแล้ว', '2025-10-02 11:51:01', 0, NULL),
-(111, 2, 'info', 'กรุณาชำระเงิน', 'ออเดอร์ #11 ได้รับการอนุมัติ กรุณาชำระเงินเพื่อดำเนินการต่อ', '2025-10-02 12:36:34', 0, NULL);
+(111, 2, 'info', 'กรุณาชำระเงิน', 'ออเดอร์ #11 ได้รับการอนุมัติ กรุณาชำระเงินเพื่อดำเนินการต่อ', '2025-10-02 12:36:34', 0, NULL),
+(112, 25, 'success', 'ชำระเงินสำเร็จ', 'คำสั่งซื้อ #0036 ได้รับการยืนยันแล้ว รอแอดมินตรวจสอบและจัดส่ง', '2025-10-03 11:57:54', 0, NULL),
+(113, 2, 'info', 'กำลังเตรียมสินค้า', 'คำสั่งซื้อ #38 ของคุณอยู่ระหว่างการเตรียมสินค้า กรุณารอการจัดส่ง', '2025-10-03 11:58:29', 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -690,9 +705,9 @@ INSERT INTO `orders` (`id`, `order_code`, `customer_id`, `address_id`, `total_pr
 (33, 'OR#20250926-0004', 25, 1, '11500.00', '0.00', 'standard', 'delivered', '2025-09-26 08:57:05', '11/1\nสันทราย, เมืองเชียงราย, เชียงราย, 57000', '11111111111', '2025-09-26 16:07:09', '2025-09-26 17:18:20', '2025-09-26 17:19:10', NULL, '[{\"product_qty\": 2, \"product_name\": \"หน้าต่างมุ้งสีอบขาว\"}, {\"product_qty\": 3, \"product_name\": \"หน้าต่างอลูมิเนียมสีอบขาว\"}, {\"product_qty\": 4, \"product_name\": \"หน้าต่างมุ้งสีดำ\"}]', NULL),
 (34, 'OR#20250927-0001', 2, 2, '250.00', '0.00', 'standard', 'delivered', '2025-09-27 15:22:26', '11/1\nห้วยสัก, เมืองเชียงราย, เชียงราย, 57000', '099-999-9999', '2025-09-27 22:24:13', '2025-09-27 22:42:10', '2025-09-27 22:42:29', NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างมุ้งสีอบขาว\"}]', '2025-09-27 22:41:17'),
 (35, 'OR#20250928-0001', 25, 1, '250.00', '0.00', 'standard', 'approved', '2025-09-28 06:51:45', '11/1\nสันทราย, เมืองเชียงราย, เชียงราย, 57000', '11111111111', '2025-09-28 14:11:59', NULL, NULL, NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างมุ้งสีอบขาว\"}]', '2025-09-28 13:52:49'),
-(36, 'OR#20250928-0002', 25, 1, '3000.00', '0.00', 'standard', 'delivered', '2025-09-28 07:11:03', '11/1\nสันทราย, เมืองเชียงราย, เชียงราย, 57000', '11111111111', NULL, '2025-09-28 14:12:18', '2025-09-28 14:12:33', NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างอลูมิเนียมสีอบขาว\"}]', '2025-09-28 14:11:20'),
+(36, 'OR#20250928-0002', 25, 1, '3000.00', '0.00', 'standard', 'approved', '2025-09-28 07:11:03', '11/1\nสันทราย, เมืองเชียงราย, เชียงราย, 57000', '11111111111', '2025-10-03 11:57:53', '2025-09-28 14:12:18', '2025-09-28 14:12:33', NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างอลูมิเนียมสีอบขาว\"}]', '2025-09-28 14:11:20'),
 (37, 'OR#20250929-0001', 2, 2, '3000.00', '0.00', 'standard', 'pending', '2025-09-29 09:07:07', '11/1\nรอบเวียง, เมืองเชียงราย, เชียงราย, 57000', '099-999-9999', NULL, NULL, NULL, NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างอลูมิเนียมสีอบขาว\"}]', NULL),
-(38, 'OR#20250929-0002', 2, 2, '3250.00', '0.00', 'standard', 'approved', '2025-09-29 09:22:18', '11/1\nรอบเวียง, เมืองเชียงราย, เชียงราย, 57000', '099-999-9999', '2025-09-29 19:54:21', NULL, NULL, NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างอลูมิเนียมสีอบขาว\"}, {\"product_qty\": 1, \"product_name\": \"หน้าต่างมุ้งสีอบขาว\"}]', NULL),
+(38, 'OR#20250929-0002', 2, 2, '3250.00', '0.00', 'standard', 'processing', '2025-09-29 09:22:18', '11/1\nรอบเวียง, เมืองเชียงราย, เชียงราย, 57000', '099-999-9999', '2025-09-29 19:54:21', NULL, NULL, NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างอลูมิเนียมสีอบขาว\"}, {\"product_qty\": 1, \"product_name\": \"หน้าต่างมุ้งสีอบขาว\"}]', '2025-10-03 11:58:29'),
 (39, 'OR#20250929-0003', 25, 1, '250.00', '0.00', 'standard', 'cancelled', '2025-09-29 13:07:40', '11/1\nสันทราย, เมืองเชียงราย, เชียงราย, 57000', '11111111111', NULL, NULL, NULL, '2025-09-29 20:15:37', '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างมุ้งสีอบขาว\"}]', NULL),
 (40, 'OR#20250929-0004', 2, 2, '3250.00', '0.00', 'standard', 'pending', '2025-09-29 13:44:24', '11/1\nรอบเวียง, เมืองเชียงราย, เชียงราย, 57000', '099-999-9999', NULL, NULL, NULL, NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างอลูมิเนียมสีอบขาว\"}, {\"product_qty\": 1, \"product_name\": \"หน้าต่างมุ้งสีอบขาว\"}]', NULL),
 (41, 'OR#20250929-0005', 2, 2, '3250.00', '0.00', 'standard', 'pending', '2025-09-29 13:49:22', '11/1\nรอบเวียง, เมืองเชียงราย, เชียงราย, 57000', '099-999-9999', NULL, NULL, NULL, NULL, '[{\"product_qty\": 1, \"product_name\": \"หน้าต่างอลูมิเนียมสีอบขาว\"}, {\"product_qty\": 1, \"product_name\": \"หน้าต่างมุ้งสีอบขาว\"}]', NULL),
@@ -812,7 +827,7 @@ INSERT INTO `payments` (`id`, `customer_id`, `order_id`, `image`, `amount`, `sta
 (20, 25, 33, 'cf1b1d1f2783e0ac960323ab9c90bc97', '11500.00', 'approved', '2025-09-26 08:58:30'),
 (21, 2, 34, 'e639f9753119677838ca5f21187afb68', '250.00', 'approved', '2025-09-27 15:22:46'),
 (22, 25, 35, 'a9b5966f63ce96404e25d5ccac78af8f', '250.00', 'approved', '2025-09-28 06:52:49'),
-(23, 25, 36, '2e1272d808382ab8f958c215869b611f', '3000.00', 'pending', '2025-09-28 07:11:20');
+(23, 25, 36, '2e1272d808382ab8f958c215869b611f', '3000.00', 'approved', '2025-09-28 07:11:20');
 
 -- --------------------------------------------------------
 
@@ -1043,6 +1058,12 @@ ALTER TABLE `admin`
   ADD UNIQUE KEY `uq_admin_username` (`username`);
 
 --
+-- Indexes for table `carts`
+--
+ALTER TABLE `carts`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `category`
 --
 ALTER TABLE `category`
@@ -1262,6 +1283,12 @@ ALTER TABLE `admin`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
+-- AUTO_INCREMENT for table `carts`
+--
+ALTER TABLE `carts`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `category`
 --
 ALTER TABLE `category`
@@ -1337,7 +1364,7 @@ ALTER TABLE `knex_migrations_lock`
 -- AUTO_INCREMENT for table `ledger_entries`
 --
 ALTER TABLE `ledger_entries`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `materials`
@@ -1355,7 +1382,7 @@ ALTER TABLE `messages`
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=112;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=114;
 
 --
 -- AUTO_INCREMENT for table `orders`

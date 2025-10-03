@@ -3,56 +3,90 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const db = require('../db');
 
+const OPTIONAL_LEDGER_COLUMNS = ['category_id', 'order_id', 'custom_order_id'];
+let ledgerColumnSupportCache = null;
+
+async function getLedgerColumnSupport() {
+  if (ledgerColumnSupportCache) return ledgerColumnSupportCache;
+  try {
+    const entries = await Promise.all(
+      OPTIONAL_LEDGER_COLUMNS.map(async (name) => [name, await db.schema.hasColumn('ledger_entries', name)])
+    );
+    ledgerColumnSupportCache = entries.reduce((acc, [name, exists]) => {
+      acc[name] = Boolean(exists);
+      return acc;
+    }, {});
+  } catch (err) {
+    console.error('ledger.getLedgerColumnSupport error:', err);
+    ledgerColumnSupportCache = OPTIONAL_LEDGER_COLUMNS.reduce((acc, name) => {
+      acc[name] = false;
+      return acc;
+    }, {});
+  }
+  return ledgerColumnSupportCache;
+}
 
 exports.createBulk = async (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   if (items.length === 0) return res.status(400).json({ message: 'No items' });
 
+  const columnSupport = await getLedgerColumnSupport();
+
   const rows = items.map((it) => {
-    // type
-    const normalizedType =
-      (it.type === 'รายจ่าย' || it.type === 'expense') ? 'expense' : 'income';
+    const typeRaw = (it.type ?? '').toString().trim();
+    const typeLower = typeRaw.toLowerCase();
+    const thaiExpense = 'รายจ่าย';
+    const isExpense =
+      typeLower === 'expense' ||
+      typeRaw === thaiExpense ||
+      typeLower === thaiExpense;
+    const normalizedType = isExpense ? 'expense' : 'income';
 
-    // source (ให้ส่งมาได้: 'store' | 'online'; ถ้าไม่ส่ง = 'store')
-    const rawSource = (it.source || '').toString().toLowerCase();
-    let normalizedSource = (rawSource === 'online' || rawSource === 'store') ? rawSource : 'store';
+    const rawSource = (it.source ?? '').toString().toLowerCase();
+    let normalizedSource = rawSource === 'online' || rawSource === 'store' ? rawSource : 'store';
+    if (it.order_id || it.custom_order_id) normalizedSource = 'online';
 
-    // qty / unit_price (ค่าบวก)
     const qty = Math.max(1, Number(it.qty) || 1);
     const unitPrice = Math.abs(Number(it.unit_price) || 0);
 
-    // amount: ถ้ามี amount ส่งมาให้ถือว่า “อยากกำหนดเอง”
-    // ไม่งั้นคำนวณจาก qty*unit_price แล้วปรับสัญลักษณ์ตาม type
     let amt = Number(it.amount);
     if (!Number.isFinite(amt)) {
       amt = qty * unitPrice;
       if (normalizedType === 'expense') amt = -amt;
     } else {
-      // ถ้าผู้ใช้ส่ง amount มาเอง: บังคับสัญลักษณ์ให้ถูกทิศอีกชั้น
       if (normalizedType === 'expense' && amt > 0) amt = -amt;
       if (normalizedType === 'income' && amt < 0) amt = -amt;
     }
 
     const row = {
-      entry_date: it.date,                               // YYYY-MM-DD
-      type: normalizedType,                              // 'income' | 'expense'
-      source: normalizedSource,                          // 'store' | 'online'
-      ref_no: it.ref_no || it.order_no || null,          // เลขที่ (อ้างอิง/ใบเสร็จ/OR#...)
-      code: it.code || null,                             // รหัสสินค้า/วัสดุ
-      name: it.name || it.description || null,           // ชื่อสินค้า/วัสดุ
+      entry_date: it.date,
+      type: normalizedType,
+      source: normalizedSource,
+      ref_no: it.ref_no || it.order_no || null,
+      code: it.code || null,
+      name: it.name || it.description || null,
       qty,
-      unit_price: unitPrice,                             // เก็บเป็นค่าบวก
-      description: it.description || '-',                // คำอธิบาย
-      amount: amt,                                       // ยอดรวมสุดท้าย (ลบถ้า expense)
-      category_id: it.category_id || null,
-      order_id: it.order_id || null,
-      custom_order_id: it.custom_order_id || null,
+      unit_price: unitPrice,
+      description: it.description || '-',
+      amount: amt,
     };
 
-    // ถ้ามีการอ้างอิง order/custom-order → บังคับ source='online'
-    if ((row.order_id || row.custom_order_id) && row.source !== 'online') {
+    if (columnSupport.category_id) row.category_id = it.category_id || null;
+    if (columnSupport.order_id) row.order_id = it.order_id || null;
+    if (columnSupport.custom_order_id) row.custom_order_id = it.custom_order_id || null;
+
+    if (
+      row.source !== 'online' &&
+      (
+        (columnSupport.order_id && row.order_id) ||
+        (columnSupport.custom_order_id && row.custom_order_id) ||
+        it.order_id ||
+        it.custom_order_id
+      )
+    ) {
       row.source = 'online';
     }
+
     return row;
   });
 

@@ -1,3 +1,4 @@
+// controllers/contactController.js
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -13,37 +14,37 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype && file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only image files are allowed for QR image.'));
-  }
+  if (file.mimetype && file.mimetype.startsWith('image/')) cb(null, true);
+  else cb(new Error('Only image files are allowed.'));
 };
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname || '');
-    cb(null, `${uniqueSuffix}${ext}`);
+    cb(null, `${unique}${ext}`);
   },
 });
 
 const upload = multer({ storage, fileFilter });
 
-const uploadQrImage = (req, res, next) => {
-  upload.single('qr_image_file')(req, res, (err) => {
+// => ใช้รับไฟล์ทั้งสอง field ในคำขอเดียว
+const uploadContactImages = (req, res, next) => {
+  const mw = upload.fields([
+    { name: 'qr_image_file', maxCount: 1 },
+    { name: 'logo_file', maxCount: 1 },
+  ]);
+  mw(req, res, (err) => {
     if (err) {
-      console.error('QR image upload error:', err);
-      return res.status(400).json({ error: err.message || 'Invalid QR image file.' });
+      console.error('Upload error:', err);
+      return res.status(400).json({ error: err.message || 'Invalid image file.' });
     }
     next();
   });
 };
 
-const buildQrImagePath = (filename) => `/uploads/contact/${filename}`;
+const buildPath = (filename) => `/uploads/contact/${filename}`;
 
 const deleteFileIfExists = async (relativePath) => {
   if (!relativePath || typeof relativePath !== 'string') return;
@@ -53,47 +54,58 @@ const deleteFileIfExists = async (relativePath) => {
     await fs.promises.unlink(absolutePath);
   } catch (error) {
     if (error.code !== 'ENOENT') {
-      console.error('Error removing QR image:', error);
+      console.error('Error removing image:', error);
     }
   }
 };
 
-const trimOrEmpty = (value) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  return typeof value === 'string' ? value.trim() : String(value);
+const trimOrUndefined = (value) => {
+  if (value === null || value === undefined) return undefined;
+  const s = typeof value === 'string' ? value.trim() : String(value);
+  return s;
 };
 
 const mapRequestToPayload = (body = {}) => {
-  const phoneCandidate = trimOrEmpty(body.phone) || trimOrEmpty(body.tel);
-  const emailCandidate = trimOrEmpty(body.email) || trimOrEmpty(body.gmail);
-  const openHoursCandidate = trimOrEmpty(body.open_hours) || trimOrEmpty(body.time);
-  const mapUrlCandidate = trimOrEmpty(body.map_url) || trimOrEmpty(body.map);
-  const statusDbValue = (body.status === 'inactive' || body.status === 0 || body.status === '0') ? 0 : 1;
+  const tel = trimOrUndefined(body.phone) ?? trimOrUndefined(body.tel);
+  const gmail = trimOrUndefined(body.email) ?? trimOrUndefined(body.gmail);
+  const time = trimOrUndefined(body.open_hours) ?? trimOrUndefined(body.time);
+  const map = trimOrUndefined(body.map_url) ?? trimOrUndefined(body.map);
+
+  let status;
+  if (body.status !== undefined) {
+    status = (body.status === 'inactive' || body.status === 0 || body.status === '0') ? 0 : 1;
+  }
 
   return {
-    name: trimOrEmpty(body.name),
-    address: trimOrEmpty(body.address),
-    tel: phoneCandidate,
-    gmail: emailCandidate,
-    map: mapUrlCandidate,
-    time: openHoursCandidate,
-    logo: trimOrEmpty(body.logo),
-    qr_image: trimOrEmpty(body.qr_image),
-    bank_account: trimOrEmpty(body.bank_account),
-    bank_name: trimOrEmpty(body.bank_name),
-    account_name: trimOrEmpty(body.account_name),
-    status: statusDbValue,
+    name: trimOrUndefined(body.name),
+    address: trimOrUndefined(body.address),
+    tel,
+    gmail,
+    map,
+    time,
+    logo: trimOrUndefined(body.logo),
+    qr_image: trimOrUndefined(body.qr_image),
+    bank_account: trimOrUndefined(body.bank_account),
+    bank_name: trimOrUndefined(body.bank_name),
+    account_name: trimOrUndefined(body.account_name),
+    status,
   };
 };
 
-const hasMinimumRequiredFields = (payload) => Boolean(payload.name && payload.tel && payload.gmail);
+const pruneUndefined = (obj = {}) => {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+};
+
+const hasMinimumRequiredFields = (payload) =>
+  Boolean(payload.name && payload.tel && payload.gmail);
 
 const mapContactRecordToResponse = (info = {}) => {
-  const statusNormalized = (info.status === 'active' || info.status === 1 || info.status === '1')
-    ? 'active'
-    : 'inactive';
+  const statusNormalized =
+    (info.status === 'active' || info.status === 1 || info.status === '1') ? 'active' : 'inactive';
 
   return {
     id: info.id,
@@ -112,14 +124,23 @@ const mapContactRecordToResponse = (info = {}) => {
   };
 };
 
+// ---------- Handlers ----------
 const createContact = async (req, res) => {
-  const payload = mapRequestToPayload(req.body);
-  const uploadedQrPath = req.file ? buildQrImagePath(req.file.filename) : null;
+  // ดึงไฟล์ที่อัปโหลด (ถ้ามี)
+  const qrUploaded = req.files?.qr_image_file?.[0];
+  const logoUploaded = req.files?.logo_file?.[0];
 
+  const payload = mapRequestToPayload(req.body);
+
+  // ถ้ามีไฟล์ใหม่ ให้เซ็ต path ลง payload
+  if (qrUploaded) payload.qr_image = buildPath(qrUploaded.filename);
+  if (logoUploaded) payload.logo = buildPath(logoUploaded.filename);
+
+  // สร้างใหม่ต้องมี field ขั้นต่ำ
   if (!hasMinimumRequiredFields(payload)) {
-    if (uploadedQrPath) {
-      await deleteFileIfExists(uploadedQrPath);
-    }
+    // rollback ไฟล์ที่เพิ่งอัปโหลด
+    if (qrUploaded) await deleteFileIfExists(buildPath(qrUploaded.filename));
+    if (logoUploaded) await deleteFileIfExists(buildPath(logoUploaded.filename));
     return res.status(400).json({ error: REQUIRED_FIELDS_ERROR });
   }
 
@@ -127,36 +148,38 @@ const createContact = async (req, res) => {
     const existing = await db('contact').first();
 
     if (existing) {
-      const previousQr = existing.qr_image;
-      if (uploadedQrPath) {
-        payload.qr_image = uploadedQrPath;
+      // อัปเดตเรคคอร์ดเดียวที่มีอยู่
+      const prevQr = existing.qr_image;
+      const prevLogo = existing.logo;
+
+      const updatePayload = pruneUndefined(payload);
+      await db('contact').where({ id: existing.id }).update(updatePayload);
+
+      // ลบไฟล์เก่าที่ถูกแทนด้วยไฟล์ใหม่
+      if (qrUploaded && prevQr && prevQr !== updatePayload.qr_image) {
+        await deleteFileIfExists(prevQr);
       }
-      await db('contact').where({ id: existing.id }).update(payload);
-      if (uploadedQrPath && previousQr && previousQr !== uploadedQrPath) {
-        await deleteFileIfExists(previousQr);
+      if (logoUploaded && prevLogo && prevLogo !== updatePayload.logo) {
+        await deleteFileIfExists(prevLogo);
       }
+
       return res.status(200).json({ message: 'Contact updated.', id: existing.id });
     }
 
-    if (uploadedQrPath) {
-      payload.qr_image = uploadedQrPath;
-    }
-
-    const insertData = { ...payload };
-    if (req.body && req.body.id !== undefined && req.body.id !== null && req.body.id !== '') {
-      insertData.id = req.body.id;
-    } else {
-      insertData.id = 1;
-    }
+    // ยังไม่มี -> insert ใหม่ (กำหนด id=1 เป็นค่าเริ่มต้น)
+    const insertData = pruneUndefined({
+      ...payload,
+      id: (req.body && req.body.id) ? req.body.id : 1,
+    });
 
     const insertedIds = await db('contact').insert(insertData);
     const newId = (req.body && req.body.id) || insertedIds?.[0] || insertData.id;
 
     return res.status(201).json({ message: 'Contact created.', id: newId });
   } catch (err) {
-    if (uploadedQrPath) {
-      await deleteFileIfExists(uploadedQrPath);
-    }
+    // rollback ไฟล์ใหม่
+    if (qrUploaded) await deleteFileIfExists(buildPath(qrUploaded.filename));
+    if (logoUploaded) await deleteFileIfExists(buildPath(logoUploaded.filename));
     console.error('Error creating contact:', err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR });
   }
@@ -164,41 +187,45 @@ const createContact = async (req, res) => {
 
 const updateContactById = async (req, res) => {
   const { id } = req.params;
-  const payload = mapRequestToPayload(req.body);
-  const uploadedQrPath = req.file ? buildQrImagePath(req.file.filename) : null;
 
-  if (!hasMinimumRequiredFields(payload)) {
-    if (uploadedQrPath) {
-      await deleteFileIfExists(uploadedQrPath);
-    }
+  const qrUploaded = req.files?.qr_image_file?.[0];
+  const logoUploaded = req.files?.logo_file?.[0];
+
+  const payload = mapRequestToPayload(req.body);
+  if (qrUploaded) payload.qr_image = buildPath(qrUploaded.filename);
+  if (logoUploaded) payload.logo = buildPath(logoUploaded.filename);
+
+  // อัปเดต: โดยปกติ frontend ส่งครบอยู่แล้ว หากอยากผ่อนเงื่อนไขให้อนุญาต partial update ก็ไม่ต้องเช็ก required
+  if (!hasMinimumRequiredFields({ ...payload, // เผื่อ frontend ส่งมาครบ
+    name: payload.name ?? 'x', tel: payload.tel ?? 'x', gmail: payload.gmail ?? 'x' })) {
+    // ถ้าจะให้ partial จริง ๆ ให้ลบบรรทัด if ทั้งบล็อกนี้ออก
+    if (qrUploaded) await deleteFileIfExists(buildPath(qrUploaded.filename));
+    if (logoUploaded) await deleteFileIfExists(buildPath(logoUploaded.filename));
     return res.status(400).json({ error: REQUIRED_FIELDS_ERROR });
   }
 
   try {
     const existing = await db('contact').where({ id }).first();
-
     if (!existing) {
-      if (uploadedQrPath) {
-        await deleteFileIfExists(uploadedQrPath);
-      }
+      if (qrUploaded) await deleteFileIfExists(buildPath(qrUploaded.filename));
+      if (logoUploaded) await deleteFileIfExists(buildPath(logoUploaded.filename));
       return res.status(404).json({ error: CONTACT_NOT_FOUND_ERROR });
     }
 
-    if (uploadedQrPath) {
-      payload.qr_image = uploadedQrPath;
-    }
+    const updatePayload = pruneUndefined(payload);
+    await db('contact').where({ id }).update(updatePayload);
 
-    await db('contact').where({ id }).update(payload);
-
-    if (uploadedQrPath && existing.qr_image && existing.qr_image !== uploadedQrPath) {
+    if (qrUploaded && existing.qr_image && existing.qr_image !== updatePayload.qr_image) {
       await deleteFileIfExists(existing.qr_image);
+    }
+    if (logoUploaded && existing.logo && existing.logo !== updatePayload.logo) {
+      await deleteFileIfExists(existing.logo);
     }
 
     return res.status(200).json({ message: 'Contact updated.', id });
   } catch (err) {
-    if (uploadedQrPath) {
-      await deleteFileIfExists(uploadedQrPath);
-    }
+    if (qrUploaded) await deleteFileIfExists(buildPath(qrUploaded.filename));
+    if (logoUploaded) await deleteFileIfExists(buildPath(logoUploaded.filename));
     console.error('Error updating contact by id:', err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR });
   }
@@ -207,7 +234,6 @@ const updateContactById = async (req, res) => {
 const getContact = async (req, res) => {
   try {
     const info = await db('contact').first();
-
     if (!info) {
       return res.status(200).json({
         name: '',
@@ -224,7 +250,6 @@ const getContact = async (req, res) => {
         status: 'active',
       });
     }
-
     return res.status(200).json(mapContactRecordToResponse(info));
   } catch (err) {
     console.error('Error fetching contact:', err);
@@ -233,13 +258,17 @@ const getContact = async (req, res) => {
 };
 
 const updateContact = async (req, res) => {
-  const payload = mapRequestToPayload(req.body);
-  const uploadedQrPath = req.file ? buildQrImagePath(req.file.filename) : null;
+  // เวอร์ชันไม่ระบุ id ใน path: ทำงานกับเรคคอร์ดแรก (singleton)
+  const qrUploaded = req.files?.qr_image_file?.[0];
+  const logoUploaded = req.files?.logo_file?.[0];
 
-  if (!hasMinimumRequiredFields(payload)) {
-    if (uploadedQrPath) {
-      await deleteFileIfExists(uploadedQrPath);
-    }
+  const payload = mapRequestToPayload(req.body);
+  if (qrUploaded) payload.qr_image = buildPath(qrUploaded.filename);
+  if (logoUploaded) payload.logo = buildPath(logoUploaded.filename);
+
+  if (!hasMinimumRequiredFields({ ...payload, name: payload.name ?? 'x', tel: payload.tel ?? 'x', gmail: payload.gmail ?? 'x' })) {
+    if (qrUploaded) await deleteFileIfExists(buildPath(qrUploaded.filename));
+    if (logoUploaded) await deleteFileIfExists(buildPath(logoUploaded.filename));
     return res.status(400).json({ error: REQUIRED_FIELDS_ERROR });
   }
 
@@ -247,43 +276,43 @@ const updateContact = async (req, res) => {
     const existing = await db('contact').first();
 
     if (existing) {
-      const previousQr = existing.qr_image;
-      if (uploadedQrPath) {
-        payload.qr_image = uploadedQrPath;
+      const prevQr = existing.qr_image;
+      const prevLogo = existing.logo;
+
+      const updatePayload = pruneUndefined(payload);
+      await db('contact').where({ id: existing.id }).update(updatePayload);
+
+      if (qrUploaded && prevQr && prevQr !== updatePayload.qr_image) {
+        await deleteFileIfExists(prevQr);
       }
-      await db('contact').where({ id: existing.id }).update(payload);
-      if (uploadedQrPath && previousQr && previousQr !== uploadedQrPath) {
-        await deleteFileIfExists(previousQr);
+      if (logoUploaded && prevLogo && prevLogo !== updatePayload.logo) {
+        await deleteFileIfExists(prevLogo);
       }
+
       return res.status(200).json({ message: 'Contact updated.', id: existing.id });
     }
 
-    if (uploadedQrPath) {
-      payload.qr_image = uploadedQrPath;
-    }
-
-    const insertData = { ...payload };
-    if (req.body && req.body.id !== undefined && req.body.id !== null && req.body.id !== '') {
-      insertData.id = req.body.id;
-    } else {
-      insertData.id = 1;
-    }
+    // ไม่มี -> สร้างใหม่
+    const insertData = pruneUndefined({
+      ...payload,
+      id: (req.body && req.body.id) ? req.body.id : 1,
+    });
 
     const insertedIds = await db('contact').insert(insertData);
     const newId = (req.body && req.body.id) || insertedIds?.[0] || insertData.id;
 
     return res.status(201).json({ message: 'Contact created.', id: newId });
   } catch (err) {
-    if (uploadedQrPath) {
-      await deleteFileIfExists(uploadedQrPath);
-    }
+    if (qrUploaded) await deleteFileIfExists(buildPath(qrUploaded.filename));
+    if (logoUploaded) await deleteFileIfExists(buildPath(logoUploaded.filename));
     console.error('Error updating contact:', err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR });
   }
 };
 
 module.exports = {
-  uploadQrImage,
+  // middleware สำหรับ route: ใช้แทน uploadQrImage เดิม
+  uploadContactImages,
   createContact,
   updateContactById,
   getContact,
