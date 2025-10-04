@@ -92,38 +92,52 @@ export default function ProductDetail() {
     }).then((r) => r.isConfirmed && navigate(next));
   };
 
-  const handleAddToCart = () => {
-    if (!user) return ensureLogin('คุณต้องเข้าสู่ระบบก่อนเพิ่มสินค้าลงตะกร้า');
+  const handleAddToCart = async () => {
+    if (!user) return ensureLogin('กรุณาเข้าสู่ระบบก่อนใช้งานฟีเจอร์ตะกร้า');
     if (!product) return;
-
-    const key = `cart_${user.id}`;
-    const cart = JSON.parse(localStorage.getItem(key)) || [];
-    const found = cart.find((i) => i.id === product.id);
-    if (found) {
-      found.quantity += qty;
-    } else {
-      cart.push({ ...product, quantity: qty, price: Number(product.price) });
+    try {
+      await addCartItem(product.id, qty);
+      window.dispatchEvent(new Event('cartUpdated'));
+      Swal.fire({
+        icon: 'success',
+        title: 'เพิ่มสินค้าในตะกร้าเรียบร้อย!',
+        showConfirmButton: false,
+        timer: 1400,
+        confirmButtonColor: '#16a34a',
+      });
+    } catch (err) {
+      Swal.fire({
+        icon: err.status === 400 ? 'warning' : 'error',
+        title: 'ไม่สามารถเพิ่มสินค้า',
+        text: err.message || 'โปรดลองอีกครั้งภายหลัง',
+        confirmButtonColor: '#dc2626',
+      });
     }
-    localStorage.setItem(key, JSON.stringify(cart));
-    window.dispatchEvent(new Event('cartUpdated'));
-    Swal.fire({
-      icon: 'success',
-      title: 'เพิ่มสินค้าลงตะกร้าแล้ว!',
-      showConfirmButton: false,
-      timer: 1400,
-      confirmButtonColor: '#16a34a',
-    });
   };
 
-  const handleBuyNow = () => {
-    if (!user) return ensureLogin('คุณต้องเข้าสู่ระบบก่อนทำการสั่งซื้อสินค้า');
+  const handleBuyNow = async () => {
+    if (!user) return ensureLogin('กรุณาเข้าสู่ระบบก่อนใช้งานฟีเจอร์ตะกร้า');
     if (!product) return;
-
-    const key = `cart_${user.id}`;
-    const cart = [{ ...product, quantity: qty, price: Number(product.price) }];
-    localStorage.setItem(key, JSON.stringify(cart));
-    window.dispatchEvent(new Event('cartUpdated'));
-    navigate('/users/checkout');
+    try {
+      const items = await addCartItem(product.id, qty);
+      window.dispatchEvent(new Event('cartUpdated'));
+      const selected = items.find((item) => (item.product_id || item.id) === product.id) || {
+        id: product.id,
+        product_id: product.id,
+        name: product.name,
+        price: Number(product.price) || 0,
+        quantity: qty,
+        image_url: product.image_url,
+      };
+      navigate('/users/checkout', { state: { items: [{ ...selected, id: selected.product_id || selected.id, quantity: qty }] } });
+    } catch (err) {
+      Swal.fire({
+        icon: err.status === 400 ? 'warning' : 'error',
+        title: 'ไม่สามารถทำรายการได้',
+        text: err.message || 'โปรดลองอีกครั้งภายหลัง',
+        confirmButtonColor: '#dc2626',
+      });
+    }
   };
 
   const toggleFavorite = async () => {

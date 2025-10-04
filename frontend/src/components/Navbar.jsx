@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { ShoppingCart, UserCircle, Bell } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { fetchCartItems } from '../services/cartService';
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false); // เมนูมือถือ
@@ -55,26 +56,37 @@ export default function Navbar() {
 
   // ตะกร้า
   useEffect(() => {
-    const updateCart = () => {
-      const cartKey = user ? `cart_${user.id}` : 'cart_guest';
-      let items = [];
-      try {
-        items = JSON.parse(localStorage.getItem(cartKey) || '[]') || [];
-      } catch {
-        items = [];
+    let ignore = false;
+    const updateCart = async () => {
+      if (!user?.id) {
+        if (!ignore) {
+          setCartItems([]);
+          setCartCount(0);
+        }
+        return;
       }
-      setCartItems(items);
-      const totalItems = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
-      setCartCount(totalItems);
+      try {
+        const items = await fetchCartItems();
+        if (!ignore) {
+          setCartItems(items);
+          const totalItems = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+          setCartCount(totalItems);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setCartItems([]);
+          setCartCount(0);
+        }
+      }
     };
     updateCart();
-    window.addEventListener('cartUpdated', updateCart);
-    window.addEventListener('storage', updateCart);
+    const handleUpdate = () => { updateCart(); };
+    window.addEventListener('cartUpdated', handleUpdate);
     return () => {
-      window.removeEventListener('cartUpdated', updateCart);
-      window.removeEventListener('storage', updateCart);
+      ignore = true;
+      window.removeEventListener('cartUpdated', handleUpdate);
     };
-  }, [user]);
+  }, [user?.id]);
 
   // การแจ้งเตือน (ดึงจำนวน unread เป็นระยะ)
   useEffect(() => {

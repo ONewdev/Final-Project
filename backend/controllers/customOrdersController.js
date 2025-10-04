@@ -122,7 +122,18 @@ exports.createOrder = async (req, res) => {
       created_at: db.fn.now(),
     };
 
-    await db('custom_orders').insert(insertPayload);
+    const [customOrderId] = await db('custom_orders').insert(insertPayload);
+    
+    // ส่ง socket event แจ้งเตือน admin
+    try {
+      const { io } = require('../app');
+      if (io) {
+        io.emit('customOrder:new', { customOrderId, user_id: userId, price: insertPayload.price });
+      }
+    } catch (err) {
+      console.warn('Socket notification failed:', err.message);
+    }
+    
     return res.status(201).json({ success: true });
   } catch (e) {
     console.error('createOrder error:', e);

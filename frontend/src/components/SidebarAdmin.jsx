@@ -2,8 +2,27 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { FaBars, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import Swal from 'sweetalert2';
+
+// --- ไอคอนสวย ๆ จาก FontAwesome (react-icons/fa) ---
+import {
+  FaTachometerAlt,
+  FaUsers,
+  FaUserShield,
+  FaUserFriends,
+  FaComments,
+  FaInbox,
+  FaBoxOpen,
+  FaTags,
+  FaCubes,
+  FaShoppingCart,
+  FaClipboardList,
+  FaCreditCard,
+  FaChartBar,
+  FaPhoneAlt,
+  FaSignOutAlt,
+  FaChevronDown
+} from 'react-icons/fa';
 
 export default function SidebarAdmin() {
   const navigate = useNavigate();
@@ -12,6 +31,7 @@ export default function SidebarAdmin() {
     users: false,
     products: false,
     orders: false,
+    reports: false,
   });
   const [chatUnread, setChatUnread] = useState(0);
   const [inboxUnread, setInboxUnread] = useState(0);
@@ -19,20 +39,17 @@ export default function SidebarAdmin() {
   const [customOrdersUnread, setCustomOrdersUnread] = useState(0);
   const [paymentCheckUnread, setPaymentCheckUnread] = useState(0);
 
-
-
   useEffect(() => {
     if (!document.getElementById('kanit-font')) {
       const link = document.createElement('link');
       link.id = 'kanit-font';
-      link.href =
-        'https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap';
+      link.href = 'https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&display=swap';
       link.rel = 'stylesheet';
       document.head.appendChild(link);
     }
   }, []);
 
-  // Socket notifications for chat
+  // --- Chat unread ---
   useEffect(() => {
     const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
     socket.on('chat message', (msg) => {
@@ -46,119 +63,63 @@ export default function SidebarAdmin() {
     };
     window.addEventListener('adminUnreadChanged', onAdminUnreadChanged);
     return () => {
-      try { socket.disconnect(); } catch { }
+      try { socket.disconnect(); } catch {}
       window.removeEventListener('adminUnreadChanged', onAdminUnreadChanged);
     };
   }, [location.pathname]);
 
   useEffect(() => {
-    if (location.pathname === '/admin/chat') {
-      setChatUnread(0);
-    }
+    if (location.pathname === '/admin/chat') setChatUnread(0);
   }, [location.pathname]);
 
+  // --- Inbox unread ---
   useEffect(() => {
-   
     const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
-    socket.on('inbox message', (msg) => {
-      setInboxUnread((prev) => prev + 1);
-    });
-    
-    return () => {
-      try { socket.disconnect(); } catch { }
-    };
+    socket.on('inbox message', () => setInboxUnread((prev) => prev + 1));
+    return () => { try { socket.disconnect(); } catch {} };
   }, []);
-
   useEffect(() => {
-    if (location.pathname === '/admin/inbox') {
-      setInboxUnread(0); // อ่านแล้ว
-    }
+    if (location.pathname === '/admin/inbox') setInboxUnread(0);
   }, [location.pathname]);
 
-  // === Orders (สั่งซื้อทั่วไป) ===
-useEffect(() => {
-  const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+  // --- Orders unread ---
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+    socket.on('order:new', () => {
+      if (location.pathname !== '/admin/orders') setOrdersUnread((prev) => prev + 1);
+    });
+    socket.on('orders:unread:set', (count) => setOrdersUnread(Number(count) || 0));
+    return () => { try { socket.disconnect(); } catch {} };
+  }, [location.pathname]);
+  useEffect(() => {
+    if (location.pathname === '/admin/orders') setOrdersUnread(0);
+  }, [location.pathname]);
 
-  // เมื่อมีคำสั่งซื้อใหม่
-  socket.on('order:new', () => {
-    // ถ้าไม่ได้อยู่หน้า orders ค่อยเพิ่มตัวเลข
-    if (location.pathname !== '/admin/orders') {
-      setOrdersUnread((prev) => prev + 1);
-    }
-  });
+  // --- Custom Orders unread ---
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+    socket.on('customOrder:new', () => {
+      if (location.pathname !== '/admin/custom-orders') setCustomOrdersUnread((prev) => prev + 1);
+    });
+    socket.on('customOrders:unread:set', (count) => setCustomOrdersUnread(Number(count) || 0));
+    return () => { try { socket.disconnect(); } catch {} };
+  }, [location.pathname]);
+  useEffect(() => {
+    if (location.pathname === '/admin/custom-orders') setCustomOrdersUnread(0);
+  }, [location.pathname]);
 
-  // ถ้าเซิร์ฟเวอร์มีการส่งค่า count ล่าสุดมาเป็นก้อน
-  socket.on('orders:unread:set', (count) => {
-    setOrdersUnread(Number(count) || 0);
-  });
-
-  return () => {
-    try { socket.disconnect(); } catch {}
-  };
-}, [location.pathname]);
-
-useEffect(() => {
-  if (location.pathname === '/admin/orders') {
-    setOrdersUnread(0); // อ่านแล้ว
-    // ถ้ามี API mark-as-read ให้เรียกที่นี่
-    // fetch(`${API}/api/admin/unread/orders/mark-read`, { method: 'POST', headers: {...} })
-  }
-}, [location.pathname]);
-
-// === Custom Orders (คำสั่งทำสินค้า) ===
-useEffect(() => {
-  const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
-
-  socket.on('customOrder:new', () => {
-    if (location.pathname !== '/admin/custom-orders') {
-      setCustomOrdersUnread((prev) => prev + 1);
-    }
-  });
-
-  socket.on('customOrders:unread:set', (count) => {
-    setCustomOrdersUnread(Number(count) || 0);
-  });
-
-  return () => {
-    try { socket.disconnect(); } catch {}
-  };
-}, [location.pathname]);
-
-useEffect(() => {
-  if (location.pathname === '/admin/custom-orders') {
-    setCustomOrdersUnread(0); // อ่านแล้ว
-    // fetch(`${API}/api/admin/unread/custom-orders/mark-read`, { method: 'POST', headers: {...} })
-  }
-}, [location.pathname]);
-
-// === Payment Check (ตรวจสลิป/การชำระเงิน) ===
-useEffect(() => {
-  const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
-
-  socket.on('payment:submitted', () => {
-    if (location.pathname !== '/admin/payment-check') {
-      setPaymentCheckUnread((prev) => prev + 1);
-    }
-  });
-
-  socket.on('paymentCheck:unread:set', (count) => {
-    setPaymentCheckUnread(Number(count) || 0);
-  });
-
-  return () => {
-    try { socket.disconnect(); } catch {}
-  };
-}, [location.pathname]);
-
-useEffect(() => {
-  if (location.pathname === '/admin/payment-check') {
-    setPaymentCheckUnread(0); // อ่านแล้ว
-    // fetch(`${API}/api/admin/unread/payment-check/mark-read`, { method: 'POST', headers: {...} })
-  }
-}, [location.pathname]);
-
-
-    
+  // --- Payment Check unread ---
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+    socket.on('payment:submitted', () => {
+      if (location.pathname !== '/admin/payment-check') setPaymentCheckUnread((prev) => prev + 1);
+    });
+    socket.on('paymentCheck:unread:set', (count) => setPaymentCheckUnread(Number(count) || 0));
+    return () => { try { socket.disconnect(); } catch {} };
+  }, [location.pathname]);
+  useEffect(() => {
+    if (location.pathname === '/admin/payment-check') setPaymentCheckUnread(0);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     Swal.fire({
@@ -173,37 +134,41 @@ useEffect(() => {
     }).then((result) => {
       if (result.isConfirmed) {
         localStorage.removeItem('admin_token');
-        Swal.fire({
-          icon: 'success',
-          title: 'ออกจากระบบแล้ว',
-          showConfirmButton: false,
-          timer: 1500,
-        }).then(() => {
-          navigate('/admin/login');
-        });
+        Swal.fire({ icon: 'success', title: 'ออกจากระบบแล้ว', showConfirmButton: false, timer: 1500 })
+          .then(() => navigate('/admin/login'));
       }
     });
   };
 
   const isActive = (path) => location.pathname === path;
 
-  const DropdownToggle = ({ label, icon, name }) => (
+  const DropdownToggle = ({ label, name, icon: Icon }) => (
     <button
       className={`btn btn-toggle align-items-center w-100 text-start ${openDropdown[name] ? 'active' : ''}`}
       onClick={() => setOpenDropdown((prev) => ({ ...prev, [name]: !prev[name] }))}
     >
-      {icon} {label}
-      <span style={{ float: 'right', transition: 'transform 0.3s', transform: openDropdown[name] ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+      <Icon className="me-2" />
+      {label}
+      <span
+        style={{
+          float: 'right',
+          transition: 'transform 0.25s',
+          transform: openDropdown[name] ? 'rotate(180deg)' : 'rotate(0deg)',
+        }}
+      >
         <FaChevronDown size={12} />
       </span>
     </button>
   );
 
+  const Badge = ({ count }) =>
+    count > 0 ? <span className="badge bg-danger ms-2">{count}</span> : null;
+
   return (
     <div
       className="vh-100 p-3 d-flex flex-column"
       style={{
-        width: '250px',
+        width: '260px',
         position: 'fixed',
         background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)',
         color: '#fff',
@@ -213,7 +178,7 @@ useEffect(() => {
       }}
     >
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h5 style={{ fontWeight: 700 }}>หน้าจัดการข้อมูล</h5>
+        <h5 style={{ fontWeight: 700, letterSpacing: 0.2 }}>หน้าจัดการข้อมูล</h5>
       </div>
 
       <ul className="nav flex-column">
@@ -221,66 +186,61 @@ useEffect(() => {
         <li className="nav-item">
           <Link
             to="/admin/dashboard"
-            className={`nav-link text-white ${isActive('/admin/dashboard') ? 'active' : ''}`}
+            className={`nav-link d-flex align-items-center text-white ${isActive('/admin/dashboard') ? 'active' : ''}`}
           >
-            📈 สถิติ
+            <FaTachometerAlt className="me-2" />
+            สถิติ
           </Link>
         </li>
 
         {/* ผู้ใช้งาน */}
         <li className="nav-item">
-          <DropdownToggle label="ผู้ใช้งาน" icon="👥" name="users" />
+          <DropdownToggle label="ผู้ใช้งาน" name="users" icon={FaUsers} />
           {openDropdown.users && (
             <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
               <li>
-                <Link to="/admin/admins" className={`nav-link text-white ps-4 ${isActive('/admin/admins') ? 'active' : ''}`}>
-                  🧑‍💼 แอดมิน
+                <Link to="/admin/admins" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/admins') ? 'active' : ''}`}>
+                  <FaUserShield className="me-2" /> แอดมิน
                 </Link>
               </li>
               <li>
-                <Link to="/admin/customers" className={`nav-link text-white ps-4 ${isActive('/admin/customers') ? 'active' : ''}`}>
-                  👥 สมาชิก
+                <Link to="/admin/customers" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/customers') ? 'active' : ''}`}>
+                  <FaUserFriends className="me-2" /> สมาชิก
                 </Link>
               </li>
               <li>
-                <Link to="/admin/chat" className={`nav-link text-white ps-4 ${isActive('/admin/chat') ? 'active' : ''}`}>
-                  💬 ข้อความลูกค้า
-                  {chatUnread > 0 && (
-                    <span className="badge bg-danger ms-2">{chatUnread}</span>
-                  )}
+                <Link to="/admin/chat" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/chat') ? 'active' : ''}`}>
+                  <FaComments className="me-2" /> ข้อความลูกค้า <Badge count={chatUnread} />
                 </Link>
               </li>
               <li>
-                <Link to="/admin/inbox" className={`nav-link text-white ps-4 ${isActive('/admin/inbox') ? 'active' : ''}`}>
-                  📥 กล่องข้อความ
-                  {inboxUnread > 0 && (
-                    <span className="badge bg-danger ms-2">{inboxUnread}</span>
-                  )}
+                <Link to="/admin/inbox" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/inbox') ? 'active' : ''}`}>
+                  <FaInbox className="me-2" /> กล่องข้อความ <Badge count={inboxUnread} />
                 </Link>
               </li>
             </ul>
           )}
         </li>
 
-        {/* สินค้า */}
+        {/* สินค้า & หมวดหมู่ */}
         <li className="nav-item">
-          <DropdownToggle label="สินค้า & หมวดหมู่" icon="📦" name="products" />
+          <DropdownToggle label="สินค้า & หมวดหมู่" name="products" icon={FaBoxOpen} />
           {openDropdown.products && (
             <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
               <li>
-                <Link to="/admin/products" className={`nav-link text-white ps-4 ${isActive('/admin/products') ? 'active' : ''}`}>
-                  📦 สินค้า/บริการ
+                <Link to="/admin/products" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/products') ? 'active' : ''}`}>
+                  <FaBoxOpen className="me-2" /> สินค้า/บริการ
                 </Link>
               </li>
               <li>
-                 <Link to="/admin/categories" className={`nav-link text-white ps-4 ${isActive('/admin/categories') ? 'active' : ''}`}>
-                  🗂️ หมวดหมู่สินค้า
-               </Link>
+                <Link to="/admin/categories" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/categories') ? 'active' : ''}`}>
+                  <FaTags className="me-2" /> หมวดหมู่สินค้า
+                </Link>
               </li>
               <li>
-                 <Link to="/admin/materials" className={`nav-link text-white ps-4 ${isActive('/admin/materials') ? 'active' : ''}`}>
-                   หมวดหมู่สินค้า
-               </Link>
+                <Link to="/admin/materials" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/materials') ? 'active' : ''}`}>
+                  <FaCubes className="me-2" /> วัสดุ/อะไหล่
+                </Link>
               </li>
             </ul>
           )}
@@ -288,94 +248,91 @@ useEffect(() => {
 
         {/* คำสั่งซื้อ */}
         <li className="nav-item">
-          <DropdownToggle label="คำสั่งซื้อ" icon="🛒" name="orders" />
+          <DropdownToggle label="คำสั่งซื้อ" name="orders" icon={FaShoppingCart} />
           {openDropdown.orders && (
             <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
               <li>
-                <Link to="/admin/orders" className={`nav-link text-white ps-4 ${isActive('/admin/orders') ? 'active' : ''}`}> 
-                  🛒 จัดการคำสั่งซื้อ
-                  {ordersUnread > 0 && (
-                    <span className="badge bg-danger ms-2">{ordersUnread}</span>
-                  )}
+                <Link to="/admin/orders" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/orders') ? 'active' : ''}`}>
+                  <FaShoppingCart className="me-2" /> จัดการคำสั่งซื้อ <Badge count={ordersUnread} />
                 </Link>
               </li>
               <li>
-                <Link to="/admin/custom-orders" className={`nav-link text-white ps-4 ${isActive('/admin/custom-orders') ? 'active' : ''}`}> 
-                  📝 คำสั่งทำสินค้า
-                  {customOrdersUnread > 0 && (
-                    <span className="badge bg-danger ms-2">{customOrdersUnread}</span>
-                  )}
+                <Link to="/admin/custom-orders" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/custom-orders') ? 'active' : ''}`}>
+                  <FaClipboardList className="me-2" /> คำสั่งทำสินค้า <Badge count={customOrdersUnread} />
                 </Link>
               </li>
               <li>
-                <Link to="/admin/payment-check" className={`nav-link text-white ps-4 ${isActive('/admin/payment-check') ? 'active' : ''}`}> 
-                  💳 ตรวจสอบการชำระเงิน
-                  {paymentCheckUnread > 0 && (
-                    <span className="badge bg-danger ms-2">{paymentCheckUnread}</span>
-                  )}
+                <Link to="/admin/payment-check" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/payment-check') ? 'active' : ''}`}>
+                  <FaCreditCard className="me-2" /> ตรวจสอบการชำระเงิน <Badge count={paymentCheckUnread} />
                 </Link>
               </li>
             </ul>
           )}
         </li>
-        {/* จัดการข้อมูลร้านค้า */}
+
+        {/* รายงาน */}
         <li className="nav-item">
-          <DropdownToggle label="รายงาน" icon="📊" name="reports" />
+          <DropdownToggle label="รายงาน" name="reports" icon={FaChartBar} />
           {openDropdown.reports && (
             <ul className="btn-toggle-nav list-unstyled fw-normal pb-1 small">
-
               <li>
-                <Link to="/admin/income-expense" className={`nav-link text-white ps-4 ${isActive('/admin/income-expense') ? 'active' : ''}`}>💰 รายรับ-รายจ่าย</Link>
+                <Link to="/admin/income-expense" className={`nav-link text-white ps-4 d-flex align-items-center ${isActive('/admin/income-expense') ? 'active' : ''}`}>
+                  <FaChartBar className="me-2" /> รายรับ-รายจ่าย
+                </Link>
               </li>
             </ul>
           )}
         </li>
-        {/* อื่นๆ */}
+
+        {/* ข้อมูลร้านค้า */}
         <li className="nav-item">
-          <Link to="/admin/contact" className={`nav-link text-white ${isActive('/admin/contact') ? 'active' : ''}`}>
-            📞 ข้อมูลร้านค้า
+          <Link to="/admin/contact" className={`nav-link text-white d-flex align-items-center ${isActive('/admin/contact') ? 'active' : ''}`}>
+            <FaPhoneAlt className="me-2" /> ข้อมูลร้านค้า
           </Link>
         </li>
 
         {/* Logout */}
         <li className="nav-item mt-3">
-          <button onClick={handleLogout} className="btn btn-link nav-link text-white text-start">
-            🔓 ออกจากระบบ
+          <button onClick={handleLogout} className="btn btn-link nav-link text-white text-start d-flex align-items-center">
+            <FaSignOutAlt className="me-2" /> ออกจากระบบ
           </button>
         </li>
       </ul>
 
       <style>{`
         .btn-toggle {
-    background: transparent;
-    border: none;
-    color: white;
-    font-weight: 500;
-  }
-  .btn-toggle:hover,
-  .btn-toggle.active {
-    background: rgba(255,255,255,0.18);
-    border-radius: 8px;
-    font-weight: 600;
-  }
-  /* ลิงก์หลัก */
-  
-  .nav-link.active {
-    background: rgba(255,255,255,0.25);
-    border-radius: 8px;
-    font-weight: 600;
-    color: white !important;
-  }
-  /* ลิงก์ในหัวข้อย่อย */
-  .btn-toggle-nav .nav-link {
-    color: white;
-  }
-  
-  .btn-toggle-nav .nav-link.active {
-    background: rgba(255,255,255,0.6);
-    color: black !important;
-    font-weight: 600;
-  }
+          background: transparent;
+          border: none;
+          color: white;
+          font-weight: 500;
+          padding: 0.45rem 0.75rem;
+          border-radius: 8px;
+        }
+        .btn-toggle:hover,
+        .btn-toggle.active {
+          background: rgba(255,255,255,0.18);
+          font-weight: 600;
+        }
+        .nav-link {
+          border-radius: 8px;
+          padding: 0.45rem 0.75rem;
+        }
+        .nav-link.active {
+          background: rgba(255,255,255,0.25);
+          font-weight: 600;
+          color: white !important;
+        }
+        .btn-toggle-nav .nav-link {
+          color: white;
+        }
+        .btn-toggle-nav .nav-link.active {
+          background: rgba(255,255,255,0.6);
+          color: black !important;
+          font-weight: 600;
+        }
+        .badge {
+          font-weight: 600;
+        }
       `}</style>
     </div>
   );

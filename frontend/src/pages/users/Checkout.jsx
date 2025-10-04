@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { clearCartItems, fetchCartItems, removeCartItem, updateCartItem } from '../../services/cartService';
 import CheckoutAddressForm from '../../components/CheckoutAddressForm';
 
 function Checkout() {
@@ -15,6 +16,28 @@ function Checkout() {
   const [deliveryInfo, setDeliveryInfo] = useState(null);
   const [note, setNote] = useState('');
 
+  // --- utils ---
+  const getItemId = (item) => {
+    const value = item?.product_id ?? item?.id;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : value;
+  };
+
+  const normalizeItems = (items = []) => items.map((item) => ({
+    ...item,
+    id: item?.id ?? item?.product_id ?? item?.id,
+    product_id: item?.product_id ?? item?.id,
+    quantity: Math.max(1, Number(item?.quantity ?? 1)),
+    price: Number(item?.price ?? 0),
+  }));
+
+  const formatCurrency = (value) => `฿${Number(value ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const getProductImage = (imagePath) => {
+    if (!imagePath) return '/images/no-image.png';
+    return imagePath.startsWith('http') ? imagePath : `${host}${imagePath}`;
+  };
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
@@ -23,45 +46,75 @@ function Checkout() {
 
     const selected = location.state?.items ?? null;
     if (Array.isArray(selected) && selected.length > 0) {
-      setCart(selected);
+      setCart(normalizeItems(selected));
       return;
     }
 
-    const cartKey = `cart_${user.id}`;
-    const savedCart = JSON.parse(localStorage.getItem(cartKey)) || [];
+    const loadCart = async () => {
+      try {
+        const items = await fetchCartItems();
+        if (!items.length) {
+          navigate('/products');
+          return;
+        }
+        setCart(normalizeItems(items));
+      } catch (err) {
+        console.error('Failed to fetch cart for checkout', err);
+        Swal.fire({
+          icon: 'error',
+          title: 'ไม่สามารถโหลดตะกร้าได้',
+          text: err?.message || 'โปรดลองอีกครั้งภายหลัง',
+        }).then(() => navigate('/products'));
+      }
+    };
 
-    if (savedCart.length === 0) {
-      navigate('/products');
-      return;
-    }
-
-    setCart(savedCart);
+    loadCart();
   }, [user, navigate, location.state]);
 
-  const handleRemoveItem = (productId) => {
-    const updatedCart = cart.filter((item) => item.id !== productId);
-    setCart(updatedCart);
-
-    if (!location.state?.items) {
-      const cartKey = `cart_${user?.id}`;
-      localStorage.setItem(cartKey, JSON.stringify(updatedCart));
+  const handleRemoveItem = async (productId) => {
+    const targetId = Number(productId) || productId;
+    if (!targetId) return;
+    if (location.state?.items) {
+      setCart((prev) => prev.filter((item) => getItemId(item) !== targetId));
+      return;
+    }
+    try {
+      const items = await removeCartItem(targetId);
+      setCart(normalizeItems(items));
+      window.dispatchEvent(new Event('cartUpdated'));
+    } catch (err) {
+      Swal.fire({
+        icon: err?.status === 400 ? 'warning' : 'error',
+        title: 'ไม่สามารถลบสินค้าได้',
+        text: err?.message || 'โปรดลองอีกครั้งภายหลัง',
+        confirmButtonColor: '#dc2626',
+      });
     }
   };
 
-  const handleUpdateQuantity = (productId, type) => {
-    const updatedCart = cart.map((item) => {
-      if (item.id === productId) {
-        const nextQty = type === 'inc' ? item.quantity + 1 : Math.max(1, item.quantity - 1);
-        return { ...item, quantity: nextQty };
-      }
-      return item;
-    });
+  const handleUpdateQuantity = async (productId, type) => {
+    const targetId = Number(productId) || productId;
+    if (!targetId) return;
+    const existing = cart.find((item) => getItemId(item) === targetId);
+    if (!existing) return;
+    const nextQty = type === 'inc' ? existing.quantity + 1 : Math.max(1, existing.quantity - 1);
 
-    setCart(updatedCart);
+    if (location.state?.items) {
+      setCart((prev) => prev.map((item) => (getItemId(item) === targetId ? { ...item, quantity: nextQty } : item)));
+      return;
+    }
 
-    if (!location.state?.items) {
-      const cartKey = `cart_${user?.id}`;
-      localStorage.setItem(cartKey, JSON.stringify(updatedCart));
+    try {
+      const items = await updateCartItem(targetId, nextQty);
+      setCart(normalizeItems(items));
+      window.dispatchEvent(new Event('cartUpdated'));
+    } catch (err) {
+      Swal.fire({
+        icon: err?.status === 400 ? 'warning' : 'error',
+        title: 'ไม่สามารถปรับจำนวนสินค้าได้',
+        text: err?.message || 'โปรดลองอีกครั้งภายหลัง',
+        confirmButtonColor: '#dc2626',
+      });
     }
   };
 
@@ -72,14 +125,6 @@ function Checkout() {
       return sum + price * quantity;
     }, 0);
   }, [cart]);
-
-  const formatCurrency = (value) =>
-    `฿${Number(value ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
-
-  const getProductImage = (imagePath) => {
-    if (!imagePath) return '/images/no-image.png';
-    return imagePath.startsWith('http') ? imagePath : `${host}${imagePath}`;
-  };
 
   const handleSubmitOrder = async (event) => {
     event.preventDefault();
@@ -100,7 +145,7 @@ function Checkout() {
 
     const confirm = await Swal.fire({
       title: 'ยืนยันคำสั่งซื้อ',
-      text: 'ต้องการสั่งซื้อสินค้าในตะกร้าตอนนี้หรือไม่?',
+      text: 'ต้องการสั่งซื้อสินค้าตอนนี้หรือไม่?',
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'ยืนยันสั่งซื้อ',
@@ -124,7 +169,7 @@ function Checkout() {
 
       const orderPayload = {
         customer_id: user.id,
-        items: cart.map((item) => ({ product_id: item.id, quantity: item.quantity })),
+        items: cart.map((item) => ({ product_id: getItemId(item), quantity: item.quantity })),
         product_list: cart.map((item) => ({ product_name: item.name, product_qty: item.quantity })),
         shipping_address: shippingAddress,
         phone: deliveryInfo.phone,
@@ -146,10 +191,10 @@ function Checkout() {
       }
 
       if (!location.state?.items) {
-        const cartKey = `cart_${user.id}`;
-        localStorage.removeItem(cartKey);
+        await clearCartItems();
+        window.dispatchEvent(new Event('cartUpdated'));
       }
-
+      setCart([]);
       await Swal.fire({
         icon: 'success',
         title: 'สั่งซื้อสำเร็จ',
@@ -196,6 +241,7 @@ function Checkout() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* ซ้าย: รายการสินค้า + ฟอร์มที่อยู่ */}
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-100 p-6">
               <div className="flex items-center justify-between mb-4">
@@ -270,6 +316,7 @@ function Checkout() {
             </div>
           </div>
 
+          {/* ขวา: สรุปการชำระเงิน */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-100 p-6 lg:sticky top-8">
               <h3 className="text-lg font-semibold text-gray-900">สรุปการชำระเงิน</h3>
@@ -296,7 +343,7 @@ function Checkout() {
                 {loading ? 'กำลังดำเนินการ...' : 'สั่งซื้อ'}
               </button>
               <p className="mt-3 text-xs text-gray-500">
-                เมื่อดำเนินการต่อ ถือว่าคุณยอมรับเงื่อนไขการสั่งซื้อของร้าน
+                เมื่ดำเนินการต่อ ถือว่าคุณยอมรับเงื่อนไขการสั่งซื้อของร้าน
               </p>
             </div>
           </div>
@@ -307,4 +354,3 @@ function Checkout() {
 }
 
 export default Checkout;
-

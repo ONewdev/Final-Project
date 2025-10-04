@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { fetchCartItems, removeCartItem, updateCartItem, clearCartItems } from '../../services/cartService';
 
 function Cart() {
   const { user } = useAuth();
@@ -15,88 +16,111 @@ function Cart() {
       : '-'
   );
 
-  // ใช้ key ตาม user id หรือ guest
-  const getCartKey = () => (user ? `cart_${user.id}` : 'cart_guest');
+  const getItemKey = useCallback((item) => {
+    const value = item?.product_id ?? item?.id;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : value;
+  }, []);
 
-  // โหลดข้อมูลตะกร้าจาก localStorage
+  const syncCartState = useCallback((items, { preserveSelection = true } = {}) => {
+    const ids = items
+      .map(getItemKey)
+      .filter((id) => id !== undefined && id !== null && id !== '');
+    const validIds = new Set(ids);
+    setCart(items);
+    setSelectedIds((prev) => {
+      if (!preserveSelection) {
+        return new Set(validIds);
+      }
+      const next = new Set();
+      prev.forEach((id) => {
+        if (validIds.has(id)) next.add(id);
+      });
+      return next;
+    });
+    window.dispatchEvent(new Event('cartUpdated'));
+  }, [getItemKey]);
+
   useEffect(() => {
-    const cartKey = getCartKey();
-    const savedCart = JSON.parse(localStorage.getItem(cartKey)) || [];
-    setCart(savedCart);
-    setSelectedIds(new Set(savedCart.map(i => i.product_id || i.id)));
-    window.dispatchEvent(new Event('cartUpdated'));
-  }, [user]);
+    const loadCart = async () => {
+      if (!user) {
+        syncCartState([], { preserveSelection: false });
+        return;
+      }
+      try {
+        const items = await fetchCartItems();
+        syncCartState(items, { preserveSelection: false });
+      } catch (err) {
+        console.error('Failed to fetch cart items', err);
+      }
+    };
+    loadCart();
+  }, [user, syncCartState]);
 
-  // ลบสินค้าออกจาก cart
-  const handleRemoveItem = (productId) => {
-    const cartKey = getCartKey();
-    const currentCart = JSON.parse(localStorage.getItem(cartKey)) || [];
-    const newCart = currentCart.filter((item) => (item.product_id || item.id) !== productId);
-    localStorage.setItem(cartKey, JSON.stringify(newCart));
-    setCart(newCart);
-    window.dispatchEvent(new Event('cartUpdated'));
+  const handleRemoveItem = async (productId) => {
+    const targetId = Number(productId) || productId;
+    if (!targetId) return;
+    try {
+      const items = await removeCartItem(targetId);
+      syncCartState(items);
+    } catch (err) {
+      alert(err.message || 'ไม่สามารถลบสินค้าออกจากตะกร้าได้');
+    }
   };
 
-  // เพิ่ม/ลด/ตั้งจำนวนสินค้า
-  const handleUpdateQuantity = (productId, typeOrValue) => {
-    const cartKey = getCartKey();
-    const currentCart = JSON.parse(localStorage.getItem(cartKey)) || [];
-    let newCart;
+  const handleUpdateQuantity = async (productId, typeOrValue) => {
+    const targetId = Number(productId) || productId;
+    if (!targetId) return;
+    const existing = cart.find((item) => getItemKey(item) === targetId);
+    if (!existing) return;
+    let nextQty = Number(existing.quantity) || 1;
     if (typeof typeOrValue === 'number') {
-      // กรณีกรอกเลขเอง
-      newCart = currentCart.map((item) => {
-        if ((item.product_id || item.id) === productId) {
-          return { ...item, quantity: typeOrValue };
-        }
-        return item;
-      }).filter((item) => item.quantity > 0);
-    } else {
-      // กรณีปุ่ม + -
-      newCart = currentCart.map((item) => {
-        if ((item.product_id || item.id) === productId) {
-          let newQty = item.quantity;
-          if (typeOrValue === 'inc') newQty += 1;
-          if (typeOrValue === 'dec') newQty = Math.max(1, newQty - 1);
-          return { ...item, quantity: newQty };
-        }
-        return item;
-      }).filter((item) => item.quantity > 0);
+      nextQty = Math.max(1, Number(typeOrValue) || 1);
+    } else if (typeOrValue === 'inc') {
+      nextQty += 1;
+    } else if (typeOrValue === 'dec') {
+      nextQty = Math.max(1, nextQty - 1);
     }
-    localStorage.setItem(cartKey, JSON.stringify(newCart));
-    setCart(newCart);
-    window.dispatchEvent(new Event('cartUpdated'));
+    if (nextQty === existing.quantity) return;
+    try {
+      const items = await updateCartItem(targetId, nextQty);
+      syncCartState(items);
+    } catch (err) {
+      alert(err.message || 'ไม่สามารถปรับจำนวนสินค้าได้');
+    }
   };
 
   // คำนวณยอดรวมของตะกร้า
   const calculateCartTotal = () => {
     return cart
-      .filter(item => selectedIds.has(item.product_id || item.id))
+      .filter(item => selectedIds.has(getItemKey(item)))
       .reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
   const countSelectedItems = () => {
     return cart
-      .filter(item => selectedIds.has(item.product_id || item.id))
+      .filter(item => selectedIds.has(getItemKey(item)))
       .reduce((sum, i) => sum + i.quantity, 0);
   };
 
   const toggleSelectOne = (pid) => {
+    const id = Number(pid) || pid;
     setSelectedIds(prev => {
-      const n = new Set(prev);
-      if (n.has(pid)) n.delete(pid); else n.add(pid);
-      return n;
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
   };
 
-  const allSelected = cart.length > 0 && selectedIds.size === cart.length;
+  const allSelected = cart.length > 0 && cart.every(item => selectedIds.has(getItemKey(item)));
   const toggleSelectAll = () => {
     if (allSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(cart.map(i => i.product_id || i.id)));
+    else setSelectedIds(new Set(cart.map(getItemKey).filter((id) => id !== undefined && id !== null && id !== '')));
   };
 
   // Checkout only selected items
   const handleCheckout = () => {
-    const selectedItems = cart.filter(i => selectedIds.has(i.product_id || i.id));
+    const selectedItems = cart.filter(i => selectedIds.has(getItemKey(i)));
     if (selectedItems.length === 0) {
       alert("????????????????????????? 1 ??????");
       return;
@@ -108,11 +132,13 @@ function Cart() {
     }));
     navigate("/users/checkout", { state: { items: itemsForCheckout } });
   };
-  const handleClearCart = () => {
-    const cartKey = getCartKey();
-    localStorage.removeItem(cartKey);
-    setCart([]);
-    window.dispatchEvent(new Event('cartUpdated'));
+  const handleClearCart = async () => {
+    try {
+      const items = await clearCartItems();
+      syncCartState(items, { preserveSelection: false });
+    } catch (err) {
+      alert(err.message || 'ไม่สามารถล้างตะกร้าได้');
+    }
   };
 
   return (

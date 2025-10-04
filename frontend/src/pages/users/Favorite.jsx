@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { addCartItem } from '../../services/cartService';
 import { removeFavorite } from '../../services/likeFavoriteService';
 import { FaHeart, FaTrash } from 'react-icons/fa';
 import Swal from 'sweetalert2';

@@ -3,7 +3,6 @@ const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
 const { generateResetToken, hashToken, verifyHashedToken } = require('../utils/passwordReset');
 const sendEmail = require('../utils/sendEmail');
 const jwt = require('jsonwebtoken');

@@ -1,20 +1,15 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import Swal from 'sweetalert2';
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import Slidebar from "../../components/Slidebar";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-// Product detail now opens on a separate page
+import { addCartItem, clearCartItems } from "../../services/cartService";
 import { FaHeart, FaRegHeart, FaStar } from "react-icons/fa";
-import {
-  submitRating,
-  addFavorite,
-  removeFavorite,
-} from "../../services/likeFavoriteService";
+import { submitRating, addFavorite, removeFavorite } from "../../services/likeFavoriteService";
 
 function Products() {
-
   useEffect(() => {
     const link = document.createElement("link");
     link.href =
@@ -27,6 +22,7 @@ function Products() {
       }
     };
   }, []);
+
   const host = import.meta.env.VITE_HOST;
 
   const [products, setProducts] = useState([]);
@@ -47,7 +43,7 @@ function Products() {
   const [currentPage, setCurrentPage] = useState(1);
   const productsPerPage = 6;
 
-  // โหลดสถานะ like/favorite ของแต่ละสินค้า
+  // โหลดสถานะ like/favorite และเรตติ้งของสินค้าแต่ละตัว
   const fetchStatuses = async () => {
     if (!user) return;
 
@@ -56,7 +52,7 @@ function Products() {
 
     for (const p of products) {
       try {
-        // เรียก API เพื่อดึง rating status
+        // เรียก API เพื่อดึงสถานะการให้คะแนน
         const ratingRes = await fetch(
           `${host}/api/interactions/rating/status?customer_id=${user.id}&product_id=${p.id}`
         );
@@ -68,7 +64,7 @@ function Products() {
           ratings[p.id] = 0;
         }
 
-        // เรียก API เพื่อดึง favorite status
+        // เรียก API เพื่อดึงสถานะรายการโปรด
         const favRes = await fetch(
           `${host}/api/interactions/favorite/status?customer_id=${user.id}&product_id=${p.id}`
         );
@@ -129,7 +125,7 @@ function Products() {
       Swal.fire({
         icon: 'success',
         title: 'ให้คะแนนสำเร็จ!',
-        text: `คุณได้ให้คะแนน ${newRating} ดาว`,
+        text: `คุณให้คะแนน ${newRating} ดาว`,
         showConfirmButton: false,
         timer: 1500,
         confirmButtonColor: '#16a34a',
@@ -185,7 +181,7 @@ function Products() {
       Swal.fire({
         icon: 'error',
         title: 'เกิดข้อผิดพลาด',
-        text: 'ไม่สามารถอัพเดทรายการโปรดได้ในขณะนี้',
+        text: 'ไม่สามารถอัปเดตรายการโปรดได้ในขณะนี้',
         confirmButtonColor: '#16a34a',
       });
     }
@@ -209,7 +205,7 @@ function Products() {
         console.error("หมวดหมู่ error:", err);
         setCategories([]);
       });
-  }, [host]); // ✅ ใส่ host ใน deps
+  }, [host]);
 
   // โหลดสินค้า
   useEffect(() => {
@@ -310,16 +306,14 @@ function Products() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+
 
   const handleAddToCart = async (product) => {
     if (!user) {
       Swal.fire({
         icon: 'warning',
         title: 'กรุณาเข้าสู่ระบบ',
-        text: 'คุณต้องเข้าสู่ระบบก่อนเพิ่มสินค้าลงตะกร้า',
+        text: 'กรุณาเข้าสู่ระบบก่อนใช้งานฟีเจอร์ตะกร้า',
         confirmButtonText: 'เข้าสู่ระบบ',
         showCancelButton: true,
         cancelButtonText: 'ยกเลิก',
@@ -330,46 +324,23 @@ function Products() {
       });
       return;
     }
-    const cartKey = `cart_${user.id}`;
-    const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
-        // ตรวจสอบจำนวนคงเหลือจาก backend ก่อนเพิ่ม
-        try {
-          const res = await fetch(`${host}/api/products/${product.id}`);
-          if (!res.ok) throw new Error('ไม่พบสินค้า');
-          const prod = await res.json();
-          const found = cart.find(item => item.id === product.id);
-          const qtyInCart = found ? found.quantity : 0;
-          if (prod.quantity <= qtyInCart) {
-            Swal.fire({
-              icon: 'warning',
-              title: 'จำนวนสินค้าไม่พอ',
-              text: `สินค้าคงเหลือ ${prod.quantity} ชิ้น ไม่สามารถเพิ่มได้อีก`,
-              confirmButtonColor: '#dc2626',
-            });
-            return;
-          }
-          if (found) {
-            found.quantity += 1;
-          } else {
-            cart.push({ ...product, quantity: 1, price: Number(product.price) });
-          }
-          localStorage.setItem(cartKey, JSON.stringify(cart));
-          window.dispatchEvent(new Event('cartUpdated'));
-          Swal.fire({
-            icon: 'success',
-            title: 'เพิ่มสินค้าลงตะกร้าแล้ว!',
-            showConfirmButton: false,
-            timer: 1500,
-            confirmButtonColor: '#16a34a',
-          });
-        } catch (err) {
-          Swal.fire({
-            icon: 'error',
-            title: 'เกิดข้อผิดพลาด',
-            text: 'ไม่สามารถตรวจสอบจำนวนสินค้าได้',
-            confirmButtonColor: '#dc2626',
-          });
-        }
+    try {
+      await addCartItem(product.id, 1);
+      window.dispatchEvent(new Event('cartUpdated'));
+      Swal.fire({
+        icon: 'success',
+        title: 'เพิ่มสินค้าในตะกร้าเรียบร้อย!',
+        showConfirmButton: false,
+        timer: 1500,
+      });
+    } catch (err) {
+      Swal.fire({
+        icon: err.status === 400 ? 'warning' : 'error',
+        title: 'ไม่สามารถเพิ่มสินค้า',
+        text: err.message || 'โปรดลองอีกครั้งภายหลัง',
+        confirmButtonColor: '#dc2626',
+      });
+    }
   };
 
   const handleBuyNow = async (product) => {
@@ -377,7 +348,7 @@ function Products() {
       Swal.fire({
         icon: 'warning',
         title: 'กรุณาเข้าสู่ระบบ',
-        text: 'คุณต้องเข้าสู่ระบบก่อนทำการสั่งซื้อสินค้า',
+        text: 'กรุณาเข้าสู่ระบบก่อนใช้งานฟีเจอร์ตะกร้า',
         confirmButtonText: 'เข้าสู่ระบบ',
         showCancelButton: true,
         cancelButtonText: 'ยกเลิก',
@@ -388,39 +359,32 @@ function Products() {
       });
       return;
     }
-    const cartKey = `cart_${user.id}`;
-    const cart = [{ ...product, quantity: 1, price: Number(product.price) }];
-        // ตรวจสอบจำนวนคงเหลือจาก backend ก่อนซื้อ
-        try {
-          const res = await fetch(`${host}/api/products/${product.id}`);
-          if (!res.ok) throw new Error('ไม่พบสินค้า');
-          const prod = await res.json();
-          if (prod.quantity < 1) {
-            Swal.fire({
-              icon: 'warning',
-              title: 'สินค้าหมด',
-              text: 'สินค้านี้หมดในคลัง ไม่สามารถสั่งซื้อได้',
-              confirmButtonColor: '#dc2626',
-            });
-            return;
-          }
-          localStorage.setItem(cartKey, JSON.stringify(cart));
-          window.dispatchEvent(new Event('cartUpdated'));
-          navigate('/users/checkout');
-        } catch (err) {
-          Swal.fire({
-            icon: 'error',
-            title: 'เกิดข้อผิดพลาด',
-            text: 'ไม่สามารถตรวจสอบจำนวนสินค้าได้',
-            confirmButtonColor: '#dc2626',
-          });
-        }
+    try {
+      await clearCartItems();
+      const items = await addCartItem(product.id, 1);
+      window.dispatchEvent(new Event('cartUpdated'));
+      const selected = items.find((item) => (item.product_id || item.id) === product.id) || {
+        id: product.id,
+        product_id: product.id,
+        name: product.name,
+        price: Number(product.price) || 0,
+        quantity: 1,
+        image_url: product.image_url,
+      };
+      navigate('/users/checkout', { state: { items: [{ ...selected, id: selected.product_id || selected.id }] } });
+    } catch (err) {
+      Swal.fire({
+        icon: err.status === 400 ? 'warning' : 'error',
+        title: 'ไม่สามารถทำรายการได้',
+        text: err.message || 'โปรดลองอีกครั้งภายหลัง',
+        confirmButtonColor: '#dc2626',
+      });
+    }
   };
 
   // ฟังก์ชันสำหรับสร้าง URL รูปภาพ
   const getImageUrl = (imageUrl) => {
     if (!imageUrl || !imageUrl.trim()) return "/images/no-image.png";
-    // ป้องกัน // ซ้ำ
     if (host.endsWith("/") && imageUrl.startsWith("/")) {
       return `${host.slice(0, -1)}${imageUrl}`;
     }
@@ -446,7 +410,7 @@ function Products() {
 
       <Navbar />
 
-      {/* แถบหัวข้อ (แก้ bg-gray/80 → bg-gray-100 ให้ถูกสเปค) */}
+      {/* แถบหัวข้อ */}
       <div className="w-full bg-gray-100 py-6 shadow text-left pl-10">
         <h1
           className="text-3xl md:text-4xl font-bold text-green-700 tracking-wide"
@@ -462,7 +426,7 @@ function Products() {
         <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
           <div className="mb-6 w-full">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 lg:gap-6">
-              {/* Left side: Category + Search side-by-side */}
+              {/* ซ้าย: หมวดหมู่ + ค้นหา */}
               <div className="flex w-full lg:flex-1 gap-4">
                 <select
                   className="w-full sm:w-64 py-3 px-4 border-2 border-green-400 rounded-2xl shadow-lg text-green-700 font-semibold bg-white focus:ring-4 focus:ring-green-300"
@@ -481,7 +445,7 @@ function Products() {
                   ))}
                 </select>
 
-                {/* Search */}
+                {/* ค้นหา */}
                 <div className="relative flex-1">
                   <input
                     type="text"
@@ -496,7 +460,7 @@ function Products() {
                 </div>
               </div>
 
-              {/* Right side: Custom order button */}
+              {/* ขวา: ปุ่มสั่งทำ */}
               <div className="w-full lg:w-auto lg:ml-auto">
                 <button
                   className="w-full lg:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded-full border-2 border-green-700 transition"
@@ -509,7 +473,7 @@ function Products() {
           </div>
         </div>
 
-        {/* Compare Bar */}
+        {/* แถบเปรียบเทียบ */}
         {comparison.length >= 2 && (
           <div className="mb-6 flex items-center gap-4 bg-yellow-50 border border-yellow-300 rounded-lg p-4">
             <span className="font-semibold text-yellow-800">
@@ -530,7 +494,7 @@ function Products() {
           </div>
         )}
 
-        {/* Products Grid */}
+        {/* สินค้า */}
         {loading ? (
           <div className="text-center py-16 text-xl text-gray-600">
             กำลังโหลดสินค้า...
@@ -544,7 +508,7 @@ function Products() {
                     key={product.id}
                     className="group relative overflow-hidden rounded-2xl border border-green-100 bg-white shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
                   >
-                    {/* รูป + ป้าย + หัวใจ */}
+                    {/* รูป/ป้าย/หัวใจ */}
                     <div className="relative aspect-[4/3] overflow-hidden">
                       <img
                         src={getImageUrl(product.image_url)}
@@ -585,7 +549,7 @@ function Products() {
                             สี: {product.color}
                           </span>
                         )}
-                        {/* จำนวนสินค้าคงเหลือ */}
+                        {/* คงเหลือ */}
                         <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${product.quantity <= 5 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
                           คงเหลือ {product.quantity} ชิ้น
                         </span>
@@ -663,7 +627,7 @@ function Products() {
                 ))}
               </div>
 
-              {/* Pagination Controls (โทนเขียว) */}
+              {/* ตัวควบคุมหน้า */}
               {totalPages > 1 && (
                 <div className="flex justify-center items-center mt-8 gap-2">
                   <button
@@ -826,18 +790,7 @@ function Products() {
         )}
       </div>
 
-      <div className="fixed bottom-[25px] right-6 z-10 flex flex-col items-end gap-">
-        {showScrollTop && (
-          <button
-            onClick={scrollToTop}
-            className="bg-green-600 hover:bg-green-700 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition duration-300"
-            aria-label="กลับขึ้นด้านบน"
-          >
-            ↑
-          </button>
-        )}
-      </div>
-
+    
       <Footer />
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -13,28 +13,23 @@ function Orders() {
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState('all');
 
-  // เพิ่ม cart state และ getCartKey
-  const [cart, setCart] = useState([]);
-  const getCartKey = () => (user ? `cart_${user.id}` : 'cart_guest');
-
+  // utils
   const formatCurrency = (num) =>
     num !== undefined && num !== null && !isNaN(Number(num))
       ? `฿${Number(num).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
       : '-';
 
-  // ✅ แปลง URL รูปให้ใช้ได้ทั้ง absolute/relative
   const imageSrc = (maybePath) => {
     if (!maybePath) return '';
-    const s = String(maybePath);
-    if (/^https?:\/\//i.test(s)) return s;
-    const clean = s.startsWith('/') ? s : `/${s}`;
+    const str = String(maybePath);
+    if (/^https?:\/\//i.test(str)) return str;
+    const clean = str.startsWith('/') ? str : `/${str}`;
     return `${host}${clean}`;
   };
 
-  // ✅ สร้างรหัส OR# สำหรับแสดงผล (ใช้ของจริงถ้ามี)
   const getDisplayOrderCode = (o) => {
     if (!o) return '';
-    if (o.order_code) return o.order_code; // ใช้รหัสจาก backend ทันทีถ้ามี
+    if (o.order_code) return o.order_code;
     const d = o.created_at ? new Date(o.created_at) : new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -46,104 +41,48 @@ function Orders() {
   const copyText = async (text) => {
     try {
       await navigator.clipboard?.writeText(text);
-      Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: 'คัดลอกรหัสออเดอร์แล้ว',
-        showConfirmButton: false,
-        timer: 1300,
-      });
-    } catch {}
+      Swal.fire({ icon: 'success', title: 'คัดลอกแล้ว', text: text, timer: 1200, showConfirmButton: false });
+    } catch {
+      // noop
+    }
   };
 
-  // โหลดข้อมูลคำสั่งซื้อจาก backend
   useEffect(() => {
     if (!user) {
+      setOrders([]);
+      setLoading(false);
       navigate('/login');
       return;
     }
+    const ac = new AbortController();
     const fetchOrders = async () => {
       try {
-        const response = await fetch(`${host}/api/orders/customer/${user.id}`, {
+        setLoading(true);
+        const res = await fetch(`${host}/api/orders/customer/${user.id}`, {
           credentials: 'include',
+          signal: ac.signal,
         });
-        if (response.ok) {
-          const data = await response.json();
+        if (res.ok) {
+          const data = await res.json();
           setOrders(Array.isArray(data) ? data : []);
         } else {
           setOrders([]);
         }
-      } catch (error) {
+      } catch (_) {
         setOrders([]);
       } finally {
-        setLoading(false);
+        if (!ac.signal.aborted) setLoading(false);
       }
     };
     fetchOrders();
+    return () => ac.abort();
   }, [user, host, navigate]);
-
-  // โหลดข้อมูลตะกร้าจาก localStorage
-  useEffect(() => {
-    if (user) {
-      const cartKey = getCartKey();
-      const savedCart = JSON.parse(localStorage.getItem(cartKey)) || [];
-      setCart(savedCart);
-      window.dispatchEvent(new Event('cartUpdated')); // อัปเดต navbar
-    }
-  }, [user]);
-
-  // ลบ/แก้จำนวนใน cart (คง logic เดิม)
-  const handleRemoveItem = (productId) => {
-    const cartKey = getCartKey();
-    const currentCart = JSON.parse(localStorage.getItem(cartKey)) || [];
-    const newCart = currentCart.filter((item) => (item.product_id || item.id) !== productId);
-    localStorage.setItem(cartKey, JSON.stringify(newCart));
-    setCart(newCart);
-    window.dispatchEvent(new Event('cartUpdated'));
-  };
-
-  const handleUpdateQuantity = (productId, type) => {
-    const cartKey = getCartKey();
-    const currentCart = JSON.parse(localStorage.getItem(cartKey)) || [];
-    const newCart = currentCart
-      .map((item) => {
-        if ((item.product_id || item.id) === productId) {
-          let newQty = item.quantity;
-          if (type === 'inc') newQty += 1;
-          if (type === 'dec') newQty = Math.max(1, newQty - 1);
-          return { ...item, quantity: newQty };
-        }
-        return item;
-      })
-      .filter((item) => item.quantity > 0);
-    localStorage.setItem(cartKey, JSON.stringify(newCart));
-    setCart(newCart);
-    window.dispatchEvent(new Event('cartUpdated'));
-  };
-
-  const calculateCartTotal = () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-  const handleCheckout = () => {
-    if (cart.length === 0) {
-      alert('ไม่มีสินค้าในตะกร้า');
-      return;
-    }
-    navigate('/users/checkout');
-  };
-
-  const handleClearCart = () => {
-    const cartKey = getCartKey();
-    localStorage.removeItem(cartKey);
-    setCart([]);
-    window.dispatchEvent(new Event('cartUpdated'));
-  };
 
   // แสดงสถานะคำสั่งซื้อ
   const getStatusText = (status) => {
     const statusMap = {
       pending: 'รอชำระเงิน/รออนุมัติ',
-      approved: 'ชำระเงินแล้ว/อนุมัติแล้ว',
+      approved: 'ชำระแล้ว/อนุมัติแล้ว',
       confirmed: 'ยืนยันแล้ว',
       processing: 'กำลังเตรียมสินค้า',
       shipped: 'กำลังจัดส่ง',
@@ -170,14 +109,14 @@ function Orders() {
   const groupOrdersByDate = (orders) => {
     const grouped = {};
     orders.forEach((order) => {
-      const date = new Date(order.created_at).toLocaleDateString('th-TH');
+      const date = new Date(order.created_at).toLocaleDateString('th-TH', { dateStyle: 'long' });
       if (!grouped[date]) grouped[date] = [];
       grouped[date].push(order);
     });
     return grouped;
   };
 
-  // --- ยืนยันรับสินค้า ---
+  // ยืนยันรับสินค้า
   const handleConfirmOrder = async (orderId) => {
     try {
       const response = await fetch(`${host}/api/orders/${orderId}/status`, {
@@ -193,11 +132,12 @@ function Orders() {
         if (updatedOrders.ok) {
           setOrders(await updatedOrders.json());
         }
+        Swal.fire('สำเร็จ', 'ยืนยันรับสินค้าแล้ว', 'success');
       } else {
-        alert('เกิดข้อผิดพลาดในการยืนยันรับสินค้า');
+        Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการยืนยันรับสินค้า', 'error');
       }
     } catch {
-      alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+      Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
     }
   };
 
@@ -213,6 +153,7 @@ function Orders() {
       cancelButtonColor: '#3085d6',
     });
     if (!result.isConfirmed) return;
+
     try {
       const response = await fetch(`${host}/api/orders/${orderId}/cancel`, {
         method: 'PATCH',
@@ -237,18 +178,12 @@ function Orders() {
   };
 
   // สถานะทั้งหมดที่ใช้ filter (ถ้าจะมี tab เลือก ใช้ setSelectedStatus ร่วมด้วย)
-  const statusTabs = [
-    { key: 'all', label: 'ทั้งหมด' },
-    { key: 'pending', label: 'ที่ต้องชำระ' },
-    { key: 'confirmed', label: 'ที่ต้องจัดส่ง' },
-    { key: 'processing', label: 'กำลังเตรียมสินค้า' },
-    { key: 'shipped', label: 'ที่ต้องรับ' },
-    { key: 'delivered', label: 'สำเร็จแล้ว' },
-    { key: 'cancelled', label: 'ยกเลิก' },
-  ];
 
   // filter orders ตาม selectedStatus
-  const filteredOrders = selectedStatus === 'all' ? orders : orders.filter((o) => o.status === selectedStatus);
+  const filteredOrders = useMemo(
+    () => (selectedStatus === 'all' ? orders : orders.filter((o) => o.status === selectedStatus)),
+    [orders, selectedStatus]
+  );
   const groupedOrders = groupOrdersByDate(filteredOrders);
 
   if (loading) {
@@ -271,6 +206,7 @@ function Orders() {
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b">
             <h2 className="text-xl font-semibold">ประวัติคำสั่งซื้อ</h2>
+           
           </div>
 
           {filteredOrders.length === 0 ? (
@@ -299,11 +235,17 @@ function Orders() {
                               >
                                 คัดลอก
                               </button>
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                                  order.status
+                                )}`}
+                              >
                                 {getStatusText(order.status)}
                               </span>
                               {/* แสดง #0001 (id เดิม) แบบจางๆ ไว้อ้างอิง/ดีบัก */}
-                              <span className="text-xs text-gray-400">#{String(order.id).padStart(4, '0')}</span>
+                              <span className="text-xs text-gray-400">
+                                #{String(order.id).padStart(4, '0')}
+                              </span>
                             </div>
 
                             <div className="text-right">

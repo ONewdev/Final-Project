@@ -1,14 +1,47 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Swal from 'sweetalert2';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import OrdersNavbar from '../../components/OrdersNavbar';
 
 function OrdersShipped() {
-  const host = import.meta.env.VITE_HOST;
+  const host = import.meta.env.VITE_HOST || '';
   const { user } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // === utils ให้สอดคล้องกับ Orders.jsx ===
+  const getDisplayOrderCode = (o) => {
+    if (!o) return '';
+    if (o.order_code) return o.order_code;
+    const d = o.created_at ? new Date(o.created_at) : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const seq = String(o.id ?? 0).padStart(4, '0');
+    return `OR#${y}${m}${day}-${seq}`;
+  };
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard?.writeText(text);
+      Swal.fire({ icon: 'success', title: 'คัดลอกแล้ว', text: text, timer: 1200, showConfirmButton: false });
+    } catch { /* noop */ }
+  };
+
+  const imageSrc = (maybePath) => {
+    if (!maybePath) return '';
+    const str = String(maybePath);
+    if (/^https?:\/\//i.test(str)) return str;
+    const clean = str.startsWith('/') ? str : `/${str}`;
+    return `${host}${clean}`;
+  };
+
+  const formatCurrency = (num) =>
+    num !== undefined && num !== null && !isNaN(Number(num))
+      ? `฿${Number(num).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
+      : '-';
 
   const getStatusText = (status) => {
     const statusMap = {
@@ -40,7 +73,7 @@ function OrdersShipped() {
     const grouped = {};
     list.forEach((order) => {
       const date = order.created_at
-        ? new Date(order.created_at).toLocaleDateString('th-TH')
+        ? new Date(order.created_at).toLocaleDateString('th-TH', { dateStyle: 'long' })
         : '-';
       if (!grouped[date]) grouped[date] = [];
       grouped[date].push(order);
@@ -57,30 +90,33 @@ function OrdersShipped() {
         credentials: 'include',
       });
       if (response.ok) {
-        const updated = await fetch(`${host}/api/orders/customer/${user.id}`, {
-          credentials: 'include',
-        });
+        const updated = await fetch(`${host}/api/orders/customer/${user.id}`, { credentials: 'include' });
         if (updated.ok) {
           const data = await updated.json();
           setOrders(data.filter((o) => o.status === 'shipped'));
         }
+        Swal.fire('สำเร็จ', 'ยืนยันรับสินค้าแล้ว', 'success');
       } else {
-        alert('ไม่สามารถยืนยันการรับสินค้าได้');
+        Swal.fire('ผิดพลาด', 'ไม่สามารถยืนยันการรับสินค้าได้', 'error');
       }
     } catch (error) {
-      alert('เกิดข้อผิดพลาดในการยืนยันการรับสินค้า');
+      Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการยืนยันการรับสินค้า', 'error');
     }
   };
 
   useEffect(() => {
     if (!user) {
+      setOrders([]);
+      setLoading(false);
       navigate('/login');
       return;
     }
+    const ac = new AbortController();
     const fetchOrders = async () => {
       try {
         const response = await fetch(`${host}/api/orders/customer/${user.id}`, {
           credentials: 'include',
+          signal: ac.signal,
         });
         if (response.ok) {
           const data = await response.json();
@@ -88,13 +124,14 @@ function OrdersShipped() {
         } else {
           setOrders([]);
         }
-      } catch (e) {
-        setOrders([]);
+      } catch {
+        if (!ac.signal.aborted) setOrders([]);
       } finally {
-        setLoading(false);
+        if (!ac.signal.aborted) setLoading(false);
       }
     };
     fetchOrders();
+    return () => ac.abort();
   }, [user, host, navigate]);
 
   const groupedOrders = useMemo(() => groupOrdersByDate(orders), [orders]);
@@ -115,7 +152,7 @@ function OrdersShipped() {
         {/* Navbar สำหรับนำทางสถานะออเดอร์ */}
         <OrdersNavbar />
 
-        {/* กล่องหลักเหมือนหน้า Orders.jsx */}
+        {/* กล่องหลัก */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b">
             <h2 className="text-xl font-semibold">กำลังจัดส่ง</h2>
@@ -129,79 +166,100 @@ function OrdersShipped() {
                 <div key={date} className="p-6">
                   <h3 className="text-lg font-semibold mb-4">{date}</h3>
                   <div className="space-y-4">
-                    {dateOrders.map((order) => (
-                      <div key={order.id} className="p-4 border rounded-lg mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div>
-                            <span className="font-semibold">รหัสออเดอร์: #{String(order.id).padStart(4, '0')}</span>
-                            <span className="ml-4 text-xs px-2 py-1 rounded bg-amber-100 text-amber-800">กำลังจัดส่ง</span>
+                    {dateOrders.map((order) => {
+                      const displayCode = getDisplayOrderCode(order);
+                      return (
+                        <div key={order.id} className="p-4 border rounded-lg mb-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold">
+                                รหัสออเดอร์:{' '}
+                                <span className="font-mono">{displayCode}</span>
+                              </span>
+                              <button
+                                className="text-xs border rounded px-2 py-0.5 hover:bg-gray-50"
+                                onClick={() => copyText(displayCode)}
+                                title="คัดลอก"
+                              >
+                                คัดลอก
+                              </button>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                                {getStatusText(order.status)}
+                              </span>
+                              {/* แสดง #0001 (id เดิม) แบบจางๆ */}
+                              <span className="text-xs text-gray-400">
+                                #{String(order.id).padStart(4, '0')}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-semibold text-lg">
+                                {formatCurrency(order.total_price)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <span className="font-semibold text-lg">
-                              {order.total_price !== undefined && order.total_price !== null && !isNaN(Number(order.total_price))
-                                ? `฿${Number(order.total_price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
-                                : '-'}
-                            </span>
-                          </div>
-                        </div>
 
-                        {/* แสดงรายการสินค้าในออเดอร์ */}
-                        <div className="flex flex-wrap gap-4 mb-2">
-                          {order.items && order.items.length > 0 ? (
-                            order.items.map((item, idx) => (
-                              <div key={item.id || idx} className="flex items-center gap-2 border rounded p-2 bg-gray-50">
-                                {item.image_url && (
-                                  <img
-                                    src={`${host}${item.image_url}`}
-                                    alt={item.product_name}
-                                    className="w-12 h-12 object-cover rounded"
-                                  />
-                                )}
-                                <div>
-                                  <div className="font-medium">{item.product_name}</div>
-                                  <div className="text-xs text-gray-500">จำนวน: {item.quantity}</div>
-                                  <div className="text-xs text-gray-500">
-                                    ราคา: {item.price !== undefined && item.price !== null && !isNaN(Number(item.price))
-                                      ? `฿${Number(item.price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
-                                      : '-'}
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <span className="text-gray-400">ไม่มีสินค้า</span>
+                          {/* แสดงเลขพัสดุ (ถ้ามี) */}
+                          {order.delivery_tracking_number && (
+                            <div className="mb-2 text-sm text-gray-700">
+                              เลขพัสดุ: <span className="font-mono">{order.delivery_tracking_number}</span>
+                            </div>
                           )}
-                        </div>
 
-                        {/* ปุ่มเฉพาะหน้า Shipped */}
-                        <div className="flex gap-2 flex-wrap">
-                          {order.status === 'shipped' && false && (
-                            <>
+                          {/* แสดงรายการสินค้าในออเดอร์ */}
+                          <div className="flex flex-wrap gap-4 mb-2">
+                            {order.items && order.items.length > 0 ? (
+                              <>
+                                {order.items.slice(0, 3).map((item, idx) => (
+                                  <div key={item.id || idx} className="flex items-center gap-2 border rounded p-2 bg-gray-50">
+                                    {item.image_url && (
+                                      <img
+                                        src={imageSrc(item.image_url)}
+                                        alt={item.product_name}
+                                        className="w-12 h-12 object-cover rounded"
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                      />
+                                    )}
+                                    <div>
+                                      <div className="font-medium">{item.product_name}</div>
+                                      <div className="text-xs text-gray-500">จำนวน: {item.quantity}</div>
+                                      <div className="text-xs text-gray-500">
+                                        ราคา: {formatCurrency(item.price)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                {order.items.length > 3 && (
+                                  <div className="flex items-center gap-2 border rounded p-2 bg-gray-100 text-gray-600 text-xs font-medium">
+                                    +{order.items.length - 3} รายการ
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-gray-400">ไม่มีสินค้า</span>
+                            )}
+                          </div>
+
+                          {/* ปุ่มเฉพาะหน้า Shipped */}
+                          <div className="flex gap-2 flex-wrap">
+                            {/* แสดงปุ่มยืนยันรับสินค้าเมื่อมีเลขพัสดุ */}
+                            {order.status === 'shipped' && order.delivery_tracking_number && (
                               <button
                                 className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
                                 onClick={() => handleConfirmOrder(order.id)}
                               >
                                 ยืนยันรับสินค้า
                               </button>
-                              <button
-                                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
-                                onClick={() => navigate(`/users/order/${order.id}`)}
-                              >
-                                ดูรายละเอียด
-                              </button>
-                            </>
-                          )}
-                          {order.status === 'shipped' && (
+                            )}
                             <button
                               className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
                               onClick={() => navigate(`/users/order/${order.id}`)}
                             >
                               ดูรายละเอียด
                             </button>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}

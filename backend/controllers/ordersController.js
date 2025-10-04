@@ -366,6 +366,16 @@ exports.createOrder = async (req, res) => {
       message: `ออเดอร์ #${orderId} ถูกสร้างเรียบร้อยแล้ว`,
     });
 
+    // ส่ง socket event แจ้งเตือน admin
+    try {
+      const { io } = require('../app');
+      if (io) {
+        io.emit('order:new', { orderId, customer_id, total_price: total });
+      }
+    } catch (err) {
+      console.warn('Socket notification failed:', err.message);
+    }
+
     res.status(201).json({ message: 'Order created successfully', orderId, total_price: total });
   } catch (err) {
     await trx.rollback();

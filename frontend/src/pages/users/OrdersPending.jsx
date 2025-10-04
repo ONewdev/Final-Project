@@ -5,11 +5,45 @@ import { useNavigate } from 'react-router-dom';
 import OrdersNavbar from '../../components/OrdersNavbar';
 
 function OrdersPending() {
-  const host = import.meta.env.VITE_HOST;
+  const host = import.meta.env.VITE_HOST || '';
   const { user } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // === utils (ให้เหมือนหน้า Orders.jsx) ===
+  const getDisplayOrderCode = (o) => {
+    if (!o) return '';
+    if (o.order_code) return o.order_code; // ถ้ามี order_code จาก backend ใช้เลย
+    const d = o.created_at ? new Date(o.created_at) : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const seq = String(o.id ?? 0).padStart(4, '0');
+    return `OR#${y}${m}${day}-${seq}`;
+  };
+
+  const imageSrc = (maybePath) => {
+    if (!maybePath) return '';
+    const str = String(maybePath);
+    if (/^https?:\/\//i.test(str)) return str; // เป็น URL เต็มอยู่แล้ว
+    const clean = str.startsWith('/') ? str : `/${str}`;
+    return `${host}${clean}`;
+  };
+
+  const formatCurrency = (num) =>
+    num !== undefined && num !== null && !isNaN(Number(num))
+      ? `฿${Number(num).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
+      : '-';
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard?.writeText(text);
+      Swal.fire({ icon: 'success', title: 'คัดลอกแล้ว', text: text, timer: 1200, showConfirmButton: false });
+    } catch (_) {
+      // noop
+    }
+  };
 
   const getStatusText = (status) => {
     const statusMap = {
@@ -20,6 +54,7 @@ function OrdersPending() {
       shipped: 'จัดส่งแล้ว',
       delivered: 'จัดส่งสำเร็จ',
       cancelled: 'ยกเลิก',
+      approved: 'ชำระแล้ว/อนุมัติแล้ว', // เผื่อมีใช้ในหน้าเดียวกัน
     };
     return statusMap[status] || status;
   };
@@ -33,6 +68,7 @@ function OrdersPending() {
       shipped: 'bg-amber-100 text-amber-800',
       delivered: 'bg-green-100 text-green-800',
       cancelled: 'bg-red-100 text-red-800',
+      approved: 'bg-blue-100 text-blue-800',
     };
     return colorMap[status] || 'bg-gray-100 text-gray-800';
   };
@@ -41,7 +77,7 @@ function OrdersPending() {
     const grouped = {};
     list.forEach((order) => {
       const date = order.created_at
-        ? new Date(order.created_at).toLocaleDateString('th-TH')
+        ? new Date(order.created_at).toLocaleDateString('th-TH', { dateStyle: 'long' })
         : '-';
       if (!grouped[date]) grouped[date] = [];
       grouped[date].push(order);
@@ -73,7 +109,7 @@ function OrdersPending() {
         });
         if (updated.ok) {
           const data = await updated.json();
-          setOrders(data.filter((o) => o.status === 'pending'));
+          setOrders(data.filter((o) => o.status === 'pending' || o.status === 'waiting_payment'));
         }
         await Swal.fire({
           icon: 'success',
@@ -102,27 +138,33 @@ function OrdersPending() {
 
   useEffect(() => {
     if (!user) {
+      setOrders([]);
+      setLoading(false);
       navigate('/login');
       return;
     }
+    const ac = new AbortController();
     const fetchOrders = async () => {
       try {
         const response = await fetch(`${host}/api/orders/customer/${user.id}`, {
           credentials: 'include',
+          signal: ac.signal,
         });
         if (response.ok) {
           const data = await response.json();
-          setOrders(data.filter((o) => o.status === 'pending'));
+          // pending tab แสดง pending + waiting_payment (ถ้าต้องการเฉพาะ pending ให้เหลือ o.status === 'pending')
+          setOrders(data.filter((o) => o.status === 'pending' || o.status === 'waiting_payment'));
         } else {
           setOrders([]);
         }
       } catch (e) {
-        setOrders([]);
+        if (!ac.signal.aborted) setOrders([]);
       } finally {
-        setLoading(false);
+        if (!ac.signal.aborted) setLoading(false);
       }
     };
     fetchOrders();
+    return () => ac.abort();
   }, [user, host, navigate]);
 
   const groupedOrders = useMemo(() => groupOrdersByDate(orders), [orders]);
@@ -155,93 +197,105 @@ function OrdersPending() {
                 <div key={date} className="p-6">
                   <h3 className="text-lg font-semibold mb-4">{date}</h3>
                   <div className="space-y-4">
-                    {dateOrders.map((order) => (
-                      <div key={order.id} className="p-4 border rounded-lg mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div>
-                            <span className="font-semibold">รหัสออเดอร์: #{String(order.id).padStart(4, '0')}</span>
-                            <span className={`ml-4 text-xs px-2 py-1 rounded ${getStatusColor(order.status)}`}>
-                              {getStatusText(order.status)}
-                            </span>
+                    {dateOrders.map((order) => {
+                      const displayCode = getDisplayOrderCode(order);
+                      return (
+                        <div key={order.id} className="p-4 border rounded-lg mb-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold">
+                                รหัสออเดอร์:{' '}
+                                <span className="font-mono">{displayCode}</span>
+                              </span>
+                              <button
+                                className="text-xs border rounded px-2 py-0.5 hover:bg-gray-50"
+                                onClick={() => copyText(displayCode)}
+                                title="คัดลอก"
+                              >
+                                คัดลอก
+                              </button>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                                {getStatusText(order.status)}
+                              </span>
+                              {/* แสดง #0001 (id เดิม) แบบจางๆ ไว้อ้างอิง/ดีบัก */}
+                              <span className="text-xs text-gray-400">
+                                #{String(order.id).padStart(4, '0')}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-semibold text-lg">
+                                {formatCurrency(order.total_price)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <span className="font-semibold text-lg">
-                              {order.total_price !== undefined && order.total_price !== null && !isNaN(Number(order.total_price))
-                                ? `฿${Number(order.total_price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
-                                : '-'}
-                            </span>
-                          </div>
-                        </div>
 
-                        {/* แสดงรายการสินค้าในออเดอร์ */}
-                        <div className="flex flex-wrap gap-4 mb-2">
-                          {order.items && order.items.length > 0 ? (
-                            <>
-                              {order.items.slice(0, 3).map((item, idx) => (
-                                <div key={item.id || idx} className="flex items-center gap-2 border rounded p-2 bg-gray-50">
-                                  {item.image_url && (
-                                    <img
-                                      src={`${host}${item.image_url}`}
-                                      alt={item.product_name}
-                                      className="w-12 h-12 object-cover rounded"
-                                    />
-                                  )}
-                                  <div>
-                                    <div className="font-medium">{item.product_name}</div>
-                                    <div className="text-xs text-gray-500">จำนวน: {item.quantity}</div>
-                                    <div className="text-xs text-gray-500">
-                                      ราคา: {item.price !== undefined && item.price !== null && !isNaN(Number(item.price))
-                                        ? `฿${Number(item.price).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`
-                                        : '-'}
+                          {/* แสดงรายการสินค้าในออเดอร์ */}
+                          <div className="flex flex-wrap gap-4 mb-2">
+                            {order.items && order.items.length > 0 ? (
+                              <>
+                                {order.items.slice(0, 3).map((item, idx) => (
+                                  <div key={item.id || idx} className="flex items-center gap-2 border rounded p-2 bg-gray-50">
+                                    {item.image_url && (
+                                      <img
+                                        src={imageSrc(item.image_url)}
+                                        alt={item.product_name}
+                                        className="w-12 h-12 object-cover rounded"
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                      />
+                                    )}
+                                    <div>
+                                      <div className="font-medium">{item.product_name}</div>
+                                      <div className="text-xs text-gray-500">จำนวน: {item.quantity}</div>
+                                      <div className="text-xs text-gray-500">
+                                        ราคา: {formatCurrency(item.price)}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              ))}
-                              {order.items.length > 3 && (
-                                <div className="flex items-center gap-2 border rounded p-2 bg-gray-100 text-gray-600 text-xs font-medium">
-                                  +{order.items.length - 3} รายการ
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-gray-400">ไม่มีสินค้า</span>
-                          )}
-                        </div>
+                                ))}
+                                {order.items.length > 3 && (
+                                  <div className="flex items-center gap-2 border rounded p-2 bg-gray-100 text-gray-600 text-xs font-medium">
+                                    +{order.items.length - 3} รายการ
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-gray-400">ไม่มีสินค้า</span>
+                            )}
+                          </div>
 
-                        {/* ปุ่มเฉพาะหน้า Pending */}
-                        <div className="flex gap-2 flex-wrap">
-                          {/* ปุ่มชำระเงิน เฉพาะสถานะ pending หรือ waiting_payment */}
-                          {(order.status === 'pending' || order.status === 'waiting_payment') && (
-                            <>
-                              <button
-                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-                                onClick={() => navigate(`/users/payments?order_id=${order.id}`)}
-                              >
-                                ชำระเงิน
-                              </button>
-                              <button
-                                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
-                                onClick={() => handleCancelOrder(order.id)}
-                              >
-                                ยกเลิกออเดอร์
-                              </button>
-                              <button
-                                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
-                                onClick={() => navigate(`/users/order/${order.id}`)}
-                              >
-                                ดูรายละเอียด
-                              </button>
-                            </>
-                          )}
-                          {/* สถานะ approved: รอแอดมินตรวจสอบ ไม่แสดงปุ่มใด ๆ */}
-                          {order.status === 'approved' && (
-                            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
-                              รอแอดมินตรวจสอบการชำระเงินและอนุมัติจัดส่ง
-                            </span>
-                          )}
+                          {/* ปุ่มเฉพาะหน้า Pending */}
+                          <div className="flex gap-2 flex-wrap">
+                            {(order.status === 'pending' || order.status === 'waiting_payment') && (
+                              <>
+                                <button
+                                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                  onClick={() => navigate(`/users/payments?order_id=${order.id}`)}
+                                >
+                                  ชำระเงิน
+                                </button>
+                                <button
+                                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
+                                  onClick={() => handleCancelOrder(order.id)}
+                                >
+                                  ยกเลิกออเดอร์
+                                </button>
+                                <button
+                                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                                  onClick={() => navigate(`/users/order/${order.id}`)}
+                                >
+                                  ดูรายละเอียด
+                                </button>
+                              </>
+                            )}
+                            {order.status === 'approved' && (
+                              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                                รอแอดมินตรวจสอบการชำระเงินและอนุมัติจัดส่ง
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}

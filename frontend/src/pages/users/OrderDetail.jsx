@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { addCartItem, clearCartItems } from '../../services/cartService';
 import OrdersNavbar from '../../components/OrdersNavbar';
 
 function OrderDetail() {

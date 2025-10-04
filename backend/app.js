@@ -1,4 +1,3 @@
-
 try { require('dotenv').config(); } catch (err) { /* noop when dotenv is missing */ }
 const express = require('express');
 const cors = require('cors');
@@ -23,19 +22,20 @@ const notificationRouter = require('./routes/notification');
 const ledgerRoutes = require('./routes/ledger');
 const shippingRoutes = require('./routes/shipping');
 const materialsRoutes = require('./routes/materials');
+const cartRoutes = require('./routes/cart');
 
 
 
 const app = express();
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'], // เพิ่ม origin ถ้าจำเป็น
+  origin: ['http://localhost:5173', 'http://localhost:3000'], // ??????????????? origin ???????????????????????????
   credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // app.use(cookieParser());
 
-// Serve static files (ภาพ) จาก public/uploads
+// Serve static files (?????????) ????????? public/uploads
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 app.get('/', (req, res) => {
@@ -67,9 +67,10 @@ app.use('/api/colors', colorsRouter);
 app.use('/api', shippingRoutes);
 app.use('/api', ledgerRoutes);
 app.use('/api/materials', materialsRoutes);
+app.use('/api/cart', cartRoutes);
 
 
-// Serve static files (ภาพ) จาก public/uploads
+// Serve static files (?????????) ????????? public/uploads
 // (duplicate uploads static removed)
 // --- Socket.io ---
 const http = require('http');
@@ -85,7 +86,7 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
   socket.on('chat message', (msg) => {
-    // broadcast ข้อมูลจริงที่ user ส่งมา (msg)
+    // broadcast ??????????????????????????????????????? user ??????????????? (msg)
     socket.broadcast.emit('chat message', msg);
   });
   socket.on('disconnect', () => {
@@ -93,8 +94,13 @@ io.on('connection', (socket) => {
   });
 });
 
+// Export io instance เพื่อให้ controllers อื่นๆ ใช้ได้
+module.exports = { io };
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
 });
+
+
 
