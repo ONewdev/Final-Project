@@ -2,7 +2,7 @@ try { require('dotenv').config(); } catch (err) { /* noop when dotenv is missing
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-// const cookieParser = require('cookie-parser');
+const session = require('express-session');
 
 const adminAuthRoutes = require('./routes/authAdmin');
 const customersRouter = require('./routes/customers');
@@ -26,14 +26,27 @@ const cartRoutes = require('./routes/cart');
 
 
 
+
 const app = express();
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'], // ??????????????? origin ???????????????????????????
+  origin: ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// app.use(cookieParser());
+
+// ตั้งค่า express-session
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'alshop_session_secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: false, // set true ถ้าใช้ https
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 วัน
+  }
+}));
 
 // Serve static files (?????????) ????????? public/uploads
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));

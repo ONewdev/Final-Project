@@ -92,7 +92,8 @@ export default function SidebarProflie() {
         background: '#ffffff',
         color: '#166534',
         fontFamily: "'Kanit', sans-serif",
-        zIndex: 1000,
+        // Lower z-index so app modals (e.g., Tailwind z-50) overlay the sidebar
+        zIndex: 40,
         boxShadow: '0 4px 24px 0 rgba(34,197,94,0.12), 0 1.5px 6px 0 rgba(0,0,0,0.08)'
       }}
     >

@@ -1,4 +1,36 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import th from 'date-fns/locale/th';
+  // helper ISO <-> Date
+  const isoToDate = (iso) => {
+    if (!iso) return null;
+    const d = new Date(`${iso}T00:00:00`);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const dateToISO = (date) => {
+    if (!date) return '';
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+  // ThaiDatePicker component
+  const ThaiDatePicker = ({ valueISO, onChangeISO, ...props }) => (
+    <DatePicker
+      selected={isoToDate(valueISO)}
+      onChange={(date) => onChangeISO(dateToISO(date))}
+      dateFormat="dd/MM/yyyy"
+      locale={th}
+      className="border rounded w-full p-2"
+      placeholderText="วัน/เดือน/ปี"
+      isClearable
+      showYearDropdown
+      scrollableYearDropdown
+      yearDropdownItemNumber={40}
+      {...props}
+    />
+  );
 import DataTable from 'react-data-table-component';
 import Swal from 'sweetalert2';
 import { FaCheck, FaShippingFast } from 'react-icons/fa';
@@ -12,7 +44,22 @@ function Orders() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // ฟังก์ชันแปลงวันที่เป็น format ไทย
+  const formatThaiDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    return d.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
   const [searchText, setSearchText] = useState('');
+
+  // สำหรับลำดับต่อเนื่องตามหน้า
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
 
   const statusMapping = {
     pending: 'รอชำระเงิน/รออนุมัติ',
@@ -33,7 +80,6 @@ function Orders() {
   // ✅ ฟังก์ชันสร้างรหัสแสดงผล (fallback ถ้ายังไม่มี order_code)
   const getDisplayOrderCode = useCallback((o) => {
     if (o?.order_code) return o.order_code;
-    // สร้างแบบ OR#YYYYMMDD-000X ใช้วันที่ created_at ถ้ามี ไม่งั้นใช้วันนี้
     const d = o?.created_at ? new Date(o.created_at) : new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -61,14 +107,19 @@ function Orders() {
       result = result.filter((o) =>
         (o.customer_name && o.customer_name.toLowerCase().includes(lower)) ||
         (String(o.id).includes(lower)) ||
-        (o.order_code && o.order_code.toLowerCase().includes(lower)) || // ✅ ค้นด้วย order_code
-        (getDisplayOrderCode(o).toLowerCase().includes(lower)) ||        // ✅ fallback code
+        (o.order_code && o.order_code.toLowerCase().includes(lower)) ||
+        (getDisplayOrderCode(o).toLowerCase().includes(lower)) ||
         (o.items && o.items.some(item => item.product_name && item.product_name.toLowerCase().includes(lower))) ||
         (o.status && (statusMapping[o.status] || o.status).toLowerCase().includes(lower))
       );
     }
     return result;
   }, [orders, filterStatus, dateFrom, dateTo, searchText, statusMapping, getDisplayOrderCode]);
+
+  // ถ้ามีการเปลี่ยนชุดข้อมูล (ฟิลเตอร์/ค้นหา) ให้รีเซ็ตกลับไปหน้า 1
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus, dateFrom, dateTo, searchText, orders]);
 
   const handleStatusChange = (id, status) => {
     const order = orders.find(o => o.id === id);
@@ -103,11 +154,25 @@ function Orders() {
     try {
       navigator.clipboard?.writeText(code);
       Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'คัดลอกรหัสแล้ว', showConfirmButton: false, timer: 1200 });
-    } catch { }
+    } catch {}
   };
+
+  const startIndex = (currentPage - 1) * perPage;
 
   const columns = useMemo(
     () => [
+      // ⭐ คอลัมน์ลำดับ
+      {
+        name: 'ลำดับ',
+        width: '90px',
+        center: true,
+        cell: (_row, index) => <span className="font-mono">{startIndex + index + 1}</span>,
+      },
+      // 👈 ย้าย 'วันที่สั่ง' มาหลัง 'ลำดับ'
+      {
+        name: 'วันที่สั่ง',
+        selector: (row) => (row.created_at ? new Date(row.created_at).toLocaleString('th-TH') : '-'),
+      },
       {
         name: 'รหัสคำสั่งซื้อ',
         width: '200px',
@@ -152,10 +217,6 @@ function Orders() {
             : '-',
       },
       { name: 'ที่อยู่จัดส่ง', selector: (row) => row.shipping_address || '-' },
-      {
-        name: 'วันที่สั่ง',
-        selector: (row) => (row.created_at ? new Date(row.created_at).toLocaleString('th-TH') : '-'),
-      },
       {
         name: 'สถานะ',
         cell: (row) => {
@@ -214,7 +275,8 @@ function Orders() {
         ),
       },
     ],
-    [getDisplayOrderCode, statusMapping]
+    // ใส่ startIndex เพื่อให้ cell ลำดับอัปเดตเมื่อเปลี่ยนหน้า/จำนวนต่อหน้า
+    [getDisplayOrderCode, statusMapping, startIndex]
   );
 
   return (
@@ -249,37 +311,26 @@ function Orders() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">วันที่สั่ง (จาก)</label>
-            <div className="relative">
-              <input
-                type="date"
-                lang="th-TH" // หรือ "en-GB"
-                value={dateFrom}
-                onChange={e => setDateFrom(e.target.value)}
-                className="border rounded w-full p-2"
-              />
-              
-            </div>
+            <ThaiDatePicker
+              valueISO={dateFrom}
+              onChangeISO={setDateFrom}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">ถึงวันที่</label>
-            <div className="relative">
-              <input
-                type="date"
-                lang="th-TH"
-                value={dateTo}
-                onChange={e => setDateTo(e.target.value)}
-                className="border rounded w-full p-2"
-              />
-             
-            </div>
-
+            <ThaiDatePicker
+              valueISO={dateTo}
+              onChangeISO={setDateTo}
+            />
           </div>
           {(dateFrom || dateTo) && (
             <div className="flex items-end">
               <button
                 className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 text-xs mt-6"
                 onClick={() => { setDateFrom(''); setDateTo(''); }}
-              >ล้างวันที่</button>
+              >
+                ล้างวันที่
+              </button>
             </div>
           )}
         </div>
@@ -290,7 +341,13 @@ function Orders() {
           columns={columns}
           data={filteredOrders}
           pagination
-          onRowClicked={(row) => navigate(`/admin/orders/${row.id}`)} // URL ยังใช้ id เดิม
+          paginationPerPage={perPage}
+          onChangePage={(page) => setCurrentPage(page)}
+          onChangeRowsPerPage={(newPerPage, page) => {
+            setPerPage(newPerPage);
+            setCurrentPage(page);
+          }}
+          onRowClicked={(row) => navigate(`/admin/orders/${row.id}`)}
           highlightOnHover
           pointerOnHover
         />

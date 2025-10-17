@@ -4,8 +4,8 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import Swal from 'sweetalert2';
 import { useAuth } from '../../context/AuthContext';
-import { FaHeart, FaRegHeart } from 'react-icons/fa';
-import { addFavorite, removeFavorite } from '../../services/likeFavoriteService';
+import { FaHeart, FaRegHeart, FaStar } from 'react-icons/fa';
+import { addFavorite, removeFavorite, submitRating, getRatingSummary } from '../../services/likeFavoriteService';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -15,6 +15,8 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [userRating, setUserRating] = useState(0);
+  const [ratingSummary, setRatingSummary] = useState({ avg_rating: 0, rating_count: 0 });
   const host = import.meta.env.VITE_HOST;
 
   // โหลดฟอนต์ไทย (เพื่อความคมชัด/คงที่ทั้งหน้า)
@@ -64,6 +66,35 @@ export default function ProductDetail() {
     };
     fetchFav();
   }, [user, product, host]);
+
+  // Fetch user's rating for this product (if logged in)
+  useEffect(() => {
+    const fetchUserRating = async () => {
+      if (!user || !product) return;
+      try {
+        const r = await fetch(`${host}/api/interactions/rating/status?customer_id=${user.id}&product_id=${product.id}`);
+        if (r.ok) {
+          const data = await r.json();
+          setUserRating(Number(data.rating) || 0);
+        } else {
+          setUserRating(0);
+        }
+      } catch {
+        setUserRating(0);
+      }
+    };
+    fetchUserRating();
+  }, [user, product, host]);
+
+  // Fetch rating summary (avg and count)
+  useEffect(() => {
+    const fetchSummary = async () => {
+      if (!product) return;
+      const summary = await getRatingSummary(product.id);
+      setRatingSummary(summary);
+    };
+    fetchSummary();
+  }, [product]);
 
   // utils
   const getImageUrl = (imageUrl) => {
@@ -159,6 +190,21 @@ export default function ProductDetail() {
     }
   };
 
+  const handleRatingChange = async (newRating) => {
+    if (!user) return ensureLogin();
+    if (!product) return;
+    try {
+      await submitRating(user.id, product.id, newRating);
+      setUserRating(newRating);
+      // refresh summary after user rates
+      const summary = await getRatingSummary(product.id);
+      setRatingSummary(summary);
+      Swal.fire({ icon: 'success', title: `ให้คะแนน ${newRating} ดาว`, timer: 1200, showConfirmButton: false });
+    } catch (e) {
+      Swal.fire({ icon: 'error', title: 'ให้คะแนนไม่สำเร็จ', confirmButtonColor: '#16a34a' });
+    }
+  };
+
   // UI
   return (
     <div
@@ -232,6 +278,28 @@ export default function ProductDetail() {
                 <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight leading-tight mb-4">
                   {product.name}
                 </h1>
+
+                {/* Rating: your rating + average */}
+                <div className="mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      {[1,2,3,4,5].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => handleRatingChange(s)}
+                          className={`${s <= (userRating || 0) ? 'text-yellow-400' : 'text-gray-300'} text-lg`}
+                          aria-label={`rate ${s}`}
+                        >
+                          <FaStar />
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-500">คุณให้: {userRating || 0}/5</span>
+                  </div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    ค่าเฉลี่ย: {Number(ratingSummary.avg_rating || 0).toFixed(1)}/5 · {ratingSummary.rating_count || 0} รีวิว
+                  </div>
+                </div>
 
                 {product.description && (
                   <p className="text-gray-700 leading-relaxed mb-5 whitespace-pre-line">

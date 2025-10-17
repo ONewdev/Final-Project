@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DataTable from 'react-data-table-component';
-import Swal from 'sweetalert2';
-import { FaCheck, FaBan, FaTrash } from 'react-icons/fa';
+import { FaSearch, FaTimes } from 'react-icons/fa';
+
 
 function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -24,57 +24,15 @@ function Customers() {
     );
   }, [customers, search]);
 
-  const handleStatusChange = (id, status) => {
-    const statusText = status === 'active' ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
-    const customer = customers.find((c) => c.id === id);
-
-    Swal.fire({
-      title: 'ยืนยันการเปลี่ยนแปลงสถานะ',
-      text: `คุณต้องการ${statusText} ${customer?.name || 'ลูกค้า'} หรือไม่?`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'ใช่, เปลี่ยนแปลง',
-      cancelButtonText: 'ยกเลิก',
-    }).then((result) => {
-      if (result.isConfirmed) {
-        fetch(`${host}/api/customers/${id}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status }),
-        })
-          .then((res) => res.json())
-          .then(() => {
-            setCustomers((prev) =>
-              prev.map((c) => (c.id === id ? { ...c, status } : c))
-            );
-            Swal.fire('สำเร็จ!', `สถานะของ ${customer?.name || 'ลูกค้า'} ถูก${statusText}แล้ว`, 'success');
-          })
-          .catch((err) => {
-            console.error('Status change error:', err);
-            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเปลี่ยนแปลงสถานะได้', 'error');
-          });
-      }
-    });
-  };
-
- 
-
   const columns = [
+    { name: 'ลำดับ', cell: (_row, index) => index + 1, width: '80px' },
     { name: 'อีเมล', selector: (row) => row.email ?? '-' },
     { name: 'ชื่อ', selector: (row) => row.name ?? '-' },
     {
-      name: 'สถานะการใช้งาน',
-      cell: (row) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-medium ${
-            row.status === 'active'
-              ? ' text-green-800'
-              : ' text-red-800'
-          }`}
-        >
-          {row.status === 'active' ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
-        </span>
-      ),
+      name: 'เวลา',
+      selector: (row) =>
+        row.created_at ? new Date(row.created_at).toLocaleString('th-TH') : '-',
+      sortable: true,
     },
     {
       name: 'รูปโปรไฟล์',
@@ -88,31 +46,6 @@ function Customers() {
         ) : (
           'N/A'
         ),
-    },
-    {
-      name: 'จัดการ',
-      cell: (row) => (
-        <div className="flex gap-2">
-          {row.status === 'active' ? (
-            <button
-              onClick={() => handleStatusChange(row.id, 'inactive')}
-              className="px-2 py-1 text-yellow-600 border border-yellow-300 rounded hover:bg-yellow-50"
-              title="ปิดใช้งาน"
-            >
-              <FaBan />
-            </button>
-          ) : (
-            <button
-              onClick={() => handleStatusChange(row.id, 'active')}
-              className="px-2 py-1 text-green-600 border border-green-300 rounded hover:bg-green-50"
-              title="เปิดใช้งาน"
-            >
-              <FaCheck />
-            </button>
-          )}
-          
-        </div>
-      ),
     },
   ];
 
@@ -131,7 +64,11 @@ function Customers() {
             className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md
                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 select-none">🔍</span>
+          <FaSearch
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            size={16}
+            aria-hidden="true"
+          />
 
           {search && (
             <button
@@ -161,3 +98,4 @@ function Customers() {
 }
 
 export default Customers;
+

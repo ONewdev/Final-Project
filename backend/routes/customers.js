@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const customerController = require('../controllers/customerController');
+const shippingController = require('../controllers/shippingController');
 const { authenticateCustomer } = require('../middlewares/customerAuth');
 
 // [ADD] controller ที่อยู่
@@ -17,8 +18,7 @@ router.get('/profile', authenticateCustomer, async (req, res) => {
     const user = await db('customers')
       .select(
         'id','email','name','status','profile_picture',
-        'created_at','updated_at','phone','address',
-        'province_id','district_id','subdistrict_id','postal_code'
+        'created_at','updated_at','phone','address'
       )
       .where({ id: req.customer.user_id })
       .first();
@@ -32,9 +32,9 @@ router.get('/profile', authenticateCustomer, async (req, res) => {
 });
 
 // ------- Master data (ต้องมาก่อน /:id) -------
-router.get('/provinces', customerController.getProvinces);
-router.get('/districts', customerController.getDistricts);
-router.get('/subdistricts', customerController.getSubdistricts);
+router.get('/provinces', shippingController.getProvinces);
+router.get('/districts', shippingController.listDistricts);
+router.get('/subdistricts', shippingController.listSubdistricts);
 
 // ===== [ADD] ที่อยู่ของลูกค้า (ล็อกอิน และต้องเป็นเจ้าของข้อมูล) =====
 router.get('/:id/addresses', authenticateCustomer, addressCtrl.list);

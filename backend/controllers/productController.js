@@ -1,8 +1,7 @@
-const db = require('../db'); 
+const db = require('../db');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-
 
 const uploadDir = path.join(__dirname, '..', 'public', 'uploads', 'products');
 if (!fs.existsSync(uploadDir)) {
@@ -10,22 +9,28 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   },
 });
 
-const upload = multer({ storage: storage });
-const uploadProductImage = upload.single('image'); // ใช้กับ field name="image"
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const ok = ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype);
+    cb(ok ? null : new Error('ไฟล์รูปต้องเป็น JPEG/PNG/WebP เท่านั้น'), ok);
+  },
+});
+const uploadProductImage = upload.single('image');
 
+// ================= Handlers =================
 
 const getAllProducts = async (req, res) => {
   try {
-    const { category_id, status } = req.query; 
+    const { category_id, status } = req.query;
 
     let query = db('products')
       .leftJoin('category', 'products.category_id', 'category.category_id')
@@ -46,17 +51,10 @@ const getAllProducts = async (req, res) => {
         'products.color'
       );
 
-    // ✅ เพิ่มเงื่อนไข filter หมวดหมู่ ถ้ามี
-    if (category_id) {
-      query = query.where('products.category_id', category_id);
-    }
-    // ✅ เพิ่ม filter สถานะ ถ้ามี
-    if (status) {
-      query = query.where('products.status', status);
-    }
+    if (category_id) query = query.where('products.category_id', category_id);
+    if (status) query = query.where('products.status', status);
 
     const products = await query;
-
     res.json(products);
   } catch (err) {
     console.error('Error fetching products:', err);
@@ -64,102 +62,133 @@ const getAllProducts = async (req, res) => {
   }
 };
 
+// ✅ ใหม่: ใช้ “โชว์” โค้ดถัดไปในฟอร์มเท่านั้น (อาจเปลี่ยนได้เมื่อมีการเพิ่มพร้อมกันหลายคน)
+const getNextProductCode = async (req, res) => {
+  try {
+    const row = await db('products')
+      .where('product_code', 'like', 'PD-%')
+      .max({ max_num: db.raw('CAST(SUBSTRING(product_code, 4) AS UNSIGNED)') })
+      .first();
 
+    const currentMax = Number(row?.max_num) || 0;
+    const nextNumber = currentMax + 1;
+    const nextCode = `PD-${String(nextNumber).padStart(4, '0')}`;
 
-// 2. Add new product (พร้อมรูป)
+    res.json({ next_code: nextCode });
+  } catch (err) {
+    console.error('Error getNextProductCode:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// ==== Add new product: ออกโค้ดอัตโนมัติ PD-0001, PD-0002, ... ====
 const addProduct = async (req, res) => {
   try {
-    const { product_code, name, description, category_id, price, quantity, status, size, color } = req.body;
+    const { name, description, category_id, price, quantity, status, size, color } = req.body;
     const imageUrl = req.file ? `/uploads/products/${req.file.filename}` : null;
+
+    if (!name || price === undefined || quantity === undefined) {
+      return res.status(400).json({ message: 'กรุณากรอก ชื่อสินค้า, ราคา และ จำนวน ให้ครบ' });
+    }
+
+    const row = await db('products')
+      .where('product_code', 'like', 'PD-%')
+      .max({ max_num: db.raw('CAST(SUBSTRING(product_code, 4) AS UNSIGNED)') })
+      .first();
+
+    const currentMax = Number(row?.max_num) || 0;
+    const nextNumber = currentMax + 1;
+    let product_code = `PD-${String(nextNumber).padStart(4, '0')}`;
 
     const newProduct = {
       product_code,
       name,
-      description,
-      category_id: category_id || null, // Ensure empty string becomes null if needed
-      price,
-      quantity,
-      status,
+      description: description || null,
+      category_id: category_id || null,
+      price: Number(price),
+      quantity: Number(quantity),
+      status: status || 'active',
       image_url: imageUrl,
-      size,
-      color,
+      size: size || null,
+      color: color || null,
     };
 
-    // For MySQL/SQLite, this returns an array with the new ID, e.g., [123]
-    const [insertedProductId] = await db('products').insert(newProduct);
+    // กันชน Unique ซ้ำเล็กน้อย
+    const MAX_RETRY = 3;
+    let insertedId = null;
 
-    // Check if the insert was successful and we got an ID
-    if (!insertedProductId) {
-        throw new Error("Failed to insert product, no ID returned.");
+    for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+      try {
+        const [id] = await db('products').insert(newProduct);
+        insertedId = id;
+        break;
+      } catch (e) {
+        if (e && e.code === 'ER_DUP_ENTRY') {
+          const row2 = await db('products')
+            .where('product_code', 'like', 'PD-%')
+            .max({ max_num: db.raw('CAST(SUBSTRING(product_code, 4) AS UNSIGNED)') })
+            .first();
+          const n2 = (Number(row2?.max_num) || 0) + 1;
+          newProduct.product_code = `PD-${String(n2).padStart(4, '0')}`;
+          continue;
+        }
+        throw e;
+      }
     }
+
+    if (!insertedId) throw new Error('ไม่สามารถเพิ่มสินค้าได้ (insert ล้มเหลว)');
 
     const newlyAddedProduct = await db('products')
-        .leftJoin('category', 'products.category_id', 'category.category_id')
-    .select(
-      'products.id',
-      'products.product_code',
-      'products.name',
-      'products.description',
-      'products.category_id',
-      'category.category_name as category_name',
-      'products.price',
-      'products.quantity',
-      'products.image_url',
-      'products.status',
-      'products.size',
-      'products.color'
-    )
-        // Correctly use the ID variable here
-        .where('products.id', insertedProductId)
-        .first();
+      .leftJoin('category', 'products.category_id', 'category.category_id')
+      .select(
+        'products.id',
+        'products.product_code',
+        'products.name',
+        'products.description',
+        'products.category_id',
+        db.raw('category.category_name as category_name'),
+        'products.price',
+        'products.quantity',
+        'products.image_url',
+        'products.status',
+        'products.size',
+        'products.color',
+        'products.created_at',
+        'products.updated_at'
+      )
+      .where('products.id', insertedId)
+      .first();
 
-    if (!newlyAddedProduct) {
-        return res.status(404).json({ message: 'Could not find newly created product.'});
-    }
-
-    res.status(201).json(newlyAddedProduct);
-
+    return res.status(201).json(newlyAddedProduct);
   } catch (err) {
-    // This will now log the detailed database error to your server console
-    console.error("Error in addProduct:", err);
+    console.error('Error in addProduct:', err);
     res.status(500).json({ message: 'เพิ่มสินค้าไม่สำเร็จ', error: err.message });
   }
 };
 
-
-
-
-
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-  const { product_code, name, description, category_id, price, quantity, status, size, color } = req.body;
-  console.log(req.file); // ตรวจสอบว่ามีไฟล์อัปโหลดหรือไม่
+  const { name, description, category_id, price, quantity, status, size, color } = req.body;
 
   try {
-    // เตรียมข้อมูลที่จะอัปเดต
     const updateData = {
-      // allow updating product code as well
-      product_code,
       name,
       description,
-      // normalize empty string to null for optional foreign key
       category_id: category_id === '' ? null : category_id,
-      price,
-      quantity,
+      price: price !== undefined ? Number(price) : undefined,
+      quantity: quantity !== undefined ? Number(quantity) : undefined,
       status,
-       updated_at: db.fn.now(),
-       size,
-       color
+      updated_at: db.fn.now(),
+      size,
+      color
     };
 
-    // ถ้ามีการอัปโหลดรูปใหม่ (req.file)
     if (req.file) {
       updateData.image_url = `/uploads/products/${req.file.filename}`;
     }
 
     await db('products').where({ id }).update(updateData);
 
-    // ดึงข้อมูล product ที่อัปเดตล่าสุดส่งกลับไป
     const updatedProduct = await db('products')
       .leftJoin('category', 'products.category_id', 'category.category_id')
       .select(
@@ -180,13 +209,13 @@ const updateProduct = async (req, res) => {
       )
       .where('products.id', id)
       .first();
+
     res.json(updatedProduct);
   } catch (error) {
     console.error('Error updating product:', error.message);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
-
 
 const updateProductStatus = async (req, res) => {
   const { id } = req.params;
@@ -203,7 +232,6 @@ const updateProductStatus = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
-
 
 const getProductById = async (req, res) => {
   const { id } = req.params;
@@ -230,9 +258,7 @@ const getProductById = async (req, res) => {
       .where('products.id', id)
       .first();
 
-    if (!product) {
-      return res.status(404).json({ message: 'ไม่พบสินค้านี้' });
-    }
+    if (!product) return res.status(404).json({ message: 'ไม่พบสินค้านี้' });
 
     res.json(product);
   } catch (error) {
@@ -241,8 +267,6 @@ const getProductById = async (req, res) => {
   }
 };
 
-// Get popular products by calculating average rating from product_ratings
-// Returns top 8 products with avg_rating > 0 (if any)
 const getPopularProducts = async (req, res) => {
   try {
     const rows = await db('products as p')
@@ -278,12 +302,9 @@ const getPopularProducts = async (req, res) => {
         db.raw('COALESCE(AVG(r.rating), 0) as avg_rating'),
         db.raw('COUNT(r.id) as rating_count')
       )
-      // If you only want active products, uncomment the next line
-      // .where('p.status', 'active')
       .orderBy([{ column: 'avg_rating', order: 'desc' }, { column: 'rating_count', order: 'desc' }])
       .limit(8);
 
-    // Ensure numeric fields are numbers in JSON
     const products = rows.map(r => ({
       ...r,
       avg_rating: Number(r.avg_rating) || 0,
@@ -300,6 +321,7 @@ const getPopularProducts = async (req, res) => {
 module.exports = {
   uploadProductImage,
   getAllProducts,
+  getNextProductCode,      // ✅ export ใหม่
   addProduct,
   updateProduct,
   updateProductStatus,

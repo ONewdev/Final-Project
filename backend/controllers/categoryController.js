@@ -42,7 +42,7 @@ function deleteIfExists(filename) {
 exports.getAllCategories = async (req, res) => {
   try {
     const categories = await db('category')
-      .select('category_id', 'category_name', 'image_url')
+      .select('category_id', 'category_name', 'image_url', db.raw('COALESCE(status, 1) AS status'))
       .orderBy('category_id', 'asc');
     res.json(categories);
   } catch (err) {
@@ -102,6 +102,17 @@ exports.updateCategory = async (req, res) => {
 exports.deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Check dependencies: products referencing this category
+    const [{ cnt: productCount }] = await db('products')
+      .where({ category_id: id })
+      .count({ cnt: '*' });
+    if (Number(productCount) > 0) {
+      return res.status(409).json({
+        error: `ไม่สามารถลบได้ เนื่องจากมีสินค้าในหมวดหมู่นี้อยู่ ${productCount} รายการ กรุณาย้ายหรือลบสินค้าก่อน`,
+        inUse: { products: Number(productCount) },
+      });
+    }
 
     const row = await db('category').where({ category_id: id }).first();
     if (!row) return res.status(404).json({ error: 'ไม่พบหมวดหมู่ที่ต้องการลบ' });
@@ -188,5 +199,32 @@ exports.deleteImage = async (req, res) => {
   } catch (err) {
     console.error('Delete category image error:', err);
     res.status(500).json({ error: 'ลบรูปภาพล้มเหลว' });
+  }
+};
+
+// PATCH /api/categories/:id/status
+exports.setCategoryStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { status } = req.body || {};
+    status = Number(status);
+    if (!(status === 0 || status === 1)) {
+      return res.status(400).json({ error: 'Invalid status. Expect 0 or 1.' });
+    }
+
+    const exists = await db('category').where({ category_id: id }).first();
+    if (!exists) return res.status(404).json({ error: 'Category not found' });
+
+    await db('category').where({ category_id: id }).update({ status });
+
+    const updated = await db('category')
+      .select('category_id', 'category_name', 'image_url', db.raw('COALESCE(status, 1) AS status'))
+      .where({ category_id: id })
+      .first();
+
+    res.json(updated);
+  } catch (err) {
+    console.error('Set category status error:', err);
+    res.status(500).json({ error: 'ไม่สามารถอัปเดตสถานะได้' });
   }
 };

@@ -9,25 +9,20 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const host = import.meta.env.VITE_HOST ;
+  const [showPassword, setShowPassword] = useState(false); // 👁️ state สำหรับลูกตา
+  const host = import.meta.env.VITE_HOST;
 
   const handleSubmit = async () => {
     setIsLoading(true);
     try {
       const res = await fetch(`${host}/api/customers/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        // credentials: 'include', // … cookie …
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
       if (res.ok) {
-        // save token and user
-        if (data.token) {
-          localStorage.setItem('token', data.token);
-        }
+        if (data.token) localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
         Swal.fire({
@@ -63,11 +58,8 @@ export default function Login() {
     }
   };
 
-  // Enter key submit
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSubmit();
-    }
+    if (e.key === 'Enter') handleSubmit();
   };
 
   const handleForgotPassword = async () => {
@@ -116,7 +108,7 @@ export default function Login() {
 
       {/* Back Button */}
       <button
-        onClick={()=> navigate('/')}
+        onClick={() => navigate('/')}
         className="absolute top-6 left-6 z-10 p-3 rounded-full bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl text-gray-600 hover:text-gray-900 hover:bg-white transition-all duration-300 transform hover:scale-110"
         aria-label="กลับหน้าแรก"
       >
@@ -143,9 +135,7 @@ export default function Login() {
           <div className="space-y-6">
             {/* Email Input */}
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium text-gray-700 block">
-                อีเมล
-              </label>
+              <label htmlFor="email" className="text-sm font-medium text-gray-700 block">อีเมล</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,11 +155,9 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Password Input */}
+            {/* Password Input with Eye Toggle */}
             <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium text-gray-700 block">
-                รหัสผ่าน
-              </label>
+              <label htmlFor="password" className="text-sm font-medium text-gray-700 block">รหัสผ่าน</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,21 +166,46 @@ export default function Login() {
                 </div>
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'} // 👁️ สลับชนิด input
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
+                  className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
                   required
                 />
+                {/* 👁️ ปุ่มลูกตา */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                  aria-pressed={showPassword}
+                  title={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? (
+                    // eye-off
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-5-10-7 0-1.068 1.014-2.77 2.855-4.3m3.276-1.94A9.964 9.964 0 0112 5c5.523 0 10 5 10 7 0 .86-.52 2.1-1.493 3.333M3 3l18 18M9.88 9.88A3 3 0 0012 15a3 3 0 002.12-.88" />
+                    </svg>
+                  ) : (
+                    // eye
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      <circle cx="12" cy="12" r="3" strokeWidth="2" stroke="currentColor" fill="none" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
 
             {/* Forgot Password */}
             <div className="text-right">
               <button
-                type="button" onClick={handleForgotPassword}
+                type="button"
+                onClick={handleForgotPassword}
                 className="text-sm text-green-600 hover:text-green-700 font-medium transition-colors duration-200"
               >
                 ลืมรหัสผ่าน?
@@ -239,10 +252,7 @@ export default function Login() {
             </div>
           </div>
         </div>
-
-        
       </div>
     </div>
   );
 }
-

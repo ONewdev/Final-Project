@@ -10,15 +10,9 @@ function Profile() {
     email: '',
     profile_picture: '',
     phone: '',
-    address: '',
-    province_id: '',
-    district_id: '',
-    subdistrict_id: '',
-    postal_code: ''
+    address: ''
   });
-  const [provinces, setProvinces] = useState([]);
-  const [districts, setDistricts] = useState([]);
-  const [subdistricts, setSubdistricts] = useState([]);
+  // ลบ state จังหวัด อำเภอ ตำบล
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -45,11 +39,7 @@ function Profile() {
         email: source.email ?? '',
         profile_picture: source.profile_picture ?? '',
         phone: source.phone ?? '',
-        address: source.address ?? '',
-        province_id: source.province_id ?? '',
-        district_id: source.district_id ?? '',
-        subdistrict_id: source.subdistrict_id ?? '',
-        postal_code: source.postal_code ?? ''
+        address: source.address ?? ''
       });
       if (!getHasId(user) && getHasId(storedUser)) {
         setUser(storedUser);
@@ -57,181 +47,10 @@ function Profile() {
     }
   }, [user, setUser]);
 
-  // provinces
-  useEffect(() => {
-    fetch(`${host}/api/customers/provinces`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setProvinces(data);
-        else setProvinces([]);
-      })
-      .catch(() => setProvinces([]));
-  }, [host]);
-
-  // districts
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadDistricts = async () => {
-      if (!form.province_id) {
-        setDistricts([]);
-        setForm((prev) => (
-          prev.district_id || prev.subdistrict_id || prev.postal_code
-            ? { ...prev, district_id: '', subdistrict_id: '', postal_code: '' }
-            : prev
-        ));
-        return;
-      }
-
-      try {
-        const response = await fetch(`${host}/api/customers/districts?province_id=${form.province_id}`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch districts: ${response.status}`);
-        }
-
-        const payload = await response.json();
-        if (cancelled) return;
-
-        const options = Array.isArray(payload) ? payload : [];
-        setDistricts(options);
-
-        if (!options.length) {
-          setForm((prev) => (
-            prev.district_id || prev.subdistrict_id || prev.postal_code
-              ? { ...prev, district_id: '', subdistrict_id: '', postal_code: '' }
-              : prev
-          ));
-          return;
-        }
-
-        if (!options.some((item) => String(item.id) === String(form.district_id))) {
-          const [firstOption] = options;
-          setForm((prev) => ({
-            ...prev,
-            district_id: String(firstOption.id),
-            subdistrict_id: '',
-            postal_code: '',
-          }));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to load districts:', error);
-          setDistricts([]);
-        }
-      }
-    };
-
-    loadDistricts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [form.province_id, host, form.district_id]);
-  // subdistricts
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadSubdistricts = async () => {
-      if (!form.district_id) {
-        setSubdistricts([]);
-        setForm((prev) => (
-          prev.subdistrict_id || prev.postal_code
-            ? { ...prev, subdistrict_id: '', postal_code: '' }
-            : prev
-        ));
-        return;
-      }
-
-      try {
-        const response = await fetch(`${host}/api/customers/subdistricts?district_id=${form.district_id}`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch subdistricts: ${response.status}`);
-        }
-
-        const payload = await response.json();
-        if (cancelled) return;
-
-        const options = Array.isArray(payload) ? payload : [];
-        setSubdistricts(options);
-
-        if (!options.length) {
-          setForm((prev) => (prev.subdistrict_id || prev.postal_code ? { ...prev, subdistrict_id: '', postal_code: '' } : prev));
-          return;
-        }
-
-        setForm((prev) => {
-          const selected = options.find((item) => String(item.id) === String(prev.subdistrict_id));
-          if (selected) {
-            if (selected.postal_code && selected.postal_code !== prev.postal_code) {
-              return { ...prev, postal_code: selected.postal_code };
-            }
-            return prev;
-          }
-
-          const [firstOption] = options;
-          return {
-            ...prev,
-            subdistrict_id: String(firstOption.id),
-            postal_code: firstOption.postal_code ?? prev.postal_code ?? '',
-          };
-        });
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to load subdistricts:', error);
-          setSubdistricts([]);
-        }
-      }
-    };
-
-    loadSubdistricts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [form.district_id, host]);
+  // ลบ useEffect ที่เกี่ยวกับจังหวัด อำเภอ ตำบล
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
-
-    if (name === 'postal_code') {
-      const digits = value.replace(/\D/g, '').slice(0, 5);
-      setForm((prev) => ({ ...prev, postal_code: digits }));
-      return;
-    }
-
-    if (name === 'province_id') {
-      setForm((prev) => ({
-        ...prev,
-        province_id: value,
-        district_id: '',
-        subdistrict_id: '',
-        postal_code: '',
-      }));
-      return;
-    }
-    if (name === 'district_id') {
-      setForm((prev) => ({
-        ...prev,
-        district_id: value,
-        subdistrict_id: '',
-        postal_code: '',
-      }));
-      return;
-    }
-    if (name === 'subdistrict_id') {
-      setForm((prev) => {
-        const next = {
-          ...prev,
-          subdistrict_id: value,
-        };
-        const matched = subdistricts.find((item) => String(item.id) === String(value));
-        if (matched?.postal_code) {
-          next.postal_code = matched.postal_code;
-        }
-        return next;
-      });
-      return;
-    }
     if (name === 'profile_picture' && files?.length > 0) {
       const file = files[0];
       const allowed = ['image/jpeg', 'image/png', 'image/gif'];
@@ -267,16 +86,11 @@ function Profile() {
       if (form.email !== user.email) formData.append('email', form.email?.trim());
       if (form.phone !== user.phone) formData.append('phone', form.phone?.trim());
       if (form.address !== user.address) formData.append('address', form.address?.trim());
-      const safeValue = v => v === '' ? null : v;
-      if (form.province_id !== user.province_id) formData.append('province_id', safeValue(form.province_id));
-      if (form.district_id !== user.district_id) formData.append('district_id', safeValue(form.district_id));
-      if (form.subdistrict_id !== user.subdistrict_id) formData.append('subdistrict_id', safeValue(form.subdistrict_id));
-      formData.append('postal_code', form.postal_code?.trim() ?? '');
       if (form.profile_picture && typeof File !== 'undefined' && form.profile_picture instanceof File) {
         formData.append('profile_picture', form.profile_picture);
       }
 
-      const res = await fetch(`${host}/api/customers/${userId}`, {
+      const res = await fetch((import.meta.env.DEV ? `/api/customers/${userId}` : `${host}/api/customers/${userId}`), {
         method: 'PUT',
         body: formData,
         credentials: 'include'
@@ -297,11 +111,7 @@ function Profile() {
             email: data.user.email ?? '',
             profile_picture: data.user.profile_picture ?? '',
             phone: data.user.phone ?? '',
-            address: data.user.address ?? '',
-            province_id: data.user.province_id ?? '',
-            district_id: data.user.district_id ?? '',
-            subdistrict_id: data.user.subdistrict_id ?? '',
-            postal_code: data.user.postal_code ?? ''
+            address: data.user.address ?? ''
           });
         }
 
@@ -339,7 +149,7 @@ function Profile() {
 
     if (result.isConfirmed) {
       try {
-        const res = await fetch(`${host}/api/customers/${userId}/profile-picture`, {
+        const res = await fetch((import.meta.env.DEV ? `/api/customers/${userId}/profile-picture` : `${host}/api/customers/${userId}/profile-picture`), {
           method: 'DELETE',
           credentials: 'include'
         });
@@ -479,70 +289,7 @@ function Profile() {
               </div>
             </section>
 
-            <section className="space-y-6 border-b pb-10">
-              <h3 className="text-xl font-semibold">ที่อยู่สำหรับจัดส่ง</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">จังหวัด</label>
-                  <select
-                    name="province_id"
-                    value={form.province_id}
-                    onChange={handleChange}
-                    className="w-full bg-transparent border-b border-gray-300 focus:border-green-600 focus:ring-0 py-2"
-                  >
-                    <option value="">เลือกจังหวัด</option>
-                    {Array.isArray(provinces) && provinces.map(p => (
-                      <option key={p.id} value={p.id}>{p.name_th}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">อำเภอ/เขต</label>
-                  <select
-                    name="district_id"
-                    value={form.district_id}
-                    onChange={handleChange}
-                    className="w-full bg-transparent border-b border-gray-300 focus:border-green-600 focus:ring-0 py-2"
-                    disabled={!form.province_id}
-                  >
-                    <option value="">เลือกอำเภอ</option>
-                    {districts.map(d => (
-                      <option key={d.id} value={d.id}>{d.name_th}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">ตำบล</label>
-                  <select
-                    name="subdistrict_id"
-                    value={form.subdistrict_id}
-                    onChange={handleChange}
-                    className="w-full bg-transparent border-b border-gray-300 focus:border-green-600 focus:ring-0 py-2"
-                    disabled={!form.district_id}
-                  >
-                    <option value="">เลือกตำบล</option>
-                    {subdistricts.map(s => (
-                      <option key={s.id} value={s.id}>{s.name_th}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">รหัสไปรษณีย์</label>
-                  <input
-                    type="text"
-                    name="postal_code"
-                    value={form.postal_code}
-                    onChange={handleChange}
-                    maxLength={5}
-                    className="w-full bg-transparent border-b border-gray-300 focus:border-green-600 focus:ring-0 py-2"
-                    placeholder="xxxxx"
-                  />
-                </div>
-              </div>
-            </section>
+            {/* ลบ section ที่อยู่สำหรับจัดส่ง จังหวัด อำเภอ ตำบล รหัสไปรษณีย์ */}
 
             {(successMsg || errorMsg) && (
               <div className={`${successMsg ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'} px-4 py-3 rounded-lg`}>

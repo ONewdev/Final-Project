@@ -333,12 +333,12 @@ function CheckoutAddressForm({ user, host, onChange }) {
 
   const handleSaveNewAddress = async () => {
     if (!userId) {
-      setMessage({ type: 'error', text: 'Please sign in before saving an address.' });
+      setMessage({ type: 'error', text: 'กรุณาเข้าสู่ระบบก่อนบันทึกที่อยู่' });
       return;
     }
     const required = [form.address, form.phone, form.province_id, form.district_id, form.subdistrict_id];
     if (required.some((item) => !item || String(item).trim() === '')) {
-      setMessage({ type: 'error', text: 'Please fill in the complete address and location information.' });
+      setMessage({ type: 'error', text: 'กรุณากรอกข้อมูลที่อยู่และพื้นที่ให้ครบถ้วน' });
       return;
     }
     setSaving(true);
@@ -352,7 +352,7 @@ function CheckoutAddressForm({ user, host, onChange }) {
         },
         credentials: 'include',
         body: JSON.stringify({
-          label: form.label || 'Checkout address',
+          label: form.label || 'ที่อยู่สำหรับชำระเงิน',
           recipient_name: form.recipient_name || defaultRecipient,
           phone: form.phone,
           address: form.address,
@@ -365,27 +365,28 @@ function CheckoutAddressForm({ user, host, onChange }) {
       });
       const created = await response.json();
       if (!response.ok) {
-        throw new Error(created?.message || 'Unable to save address.');
+        throw new Error(created?.message || 'บันทึกที่อยู่ไม่สำเร็จ');
       }
-      setMessage({ type: 'success', text: 'Address saved.' });
+      setMessage({ type: 'success', text: 'บันทึกที่อยู่เรียบร้อย' });
       await loadAddresses(created.id);
     } catch (error) {
       console.error('Failed to save address:', error);
-      setMessage({ type: 'error', text: error?.message || 'Unable to save address.' });
+      setMessage({ type: 'error', text: error?.message || 'บันทึกที่อยู่ไม่สำเร็จ' });
     } finally {
       setSaving(false);
     }
   };
+
   return (
     <div className="space-y-4">
       {isInitialLoading ? (
         <div className="rounded-md border border-gray-200 bg-white p-4 text-sm text-gray-500">
-          Loading addresses...
+          กำลังโหลดที่อยู่...
         </div>
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Delivery Address</h3>
+            <h3 className="text-lg font-semibold text-gray-900">ที่อยู่สำหรับจัดส่ง</h3>
             {message.text && (
               <span className={`text-sm ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
                 {message.text}
@@ -411,13 +412,13 @@ function CheckoutAddressForm({ user, host, onChange }) {
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{address.label || 'Saved address'}</span>
+                        <span className="font-medium text-gray-900">{address.label || 'ที่อยู่ที่บันทึกไว้'}</span>
                         {address.is_default ? (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">Default</span>
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">ค่าเริ่มต้น</span>
                         ) : null}
                       </div>
                       {address.recipient_name ? (
-                        <div className="text-sm text-gray-600">Recipient: {address.recipient_name}</div>
+                        <div className="text-sm text-gray-600">ผู้รับ: {address.recipient_name}</div>
                       ) : null}
                       <div className="text-sm text-gray-700 whitespace-pre-line">
                         {address.address}
@@ -428,7 +429,7 @@ function CheckoutAddressForm({ user, host, onChange }) {
                           .join(' ')}
                       </div>
                       {address.phone ? (
-                        <div className="text-sm text-gray-600">Phone: {address.phone}</div>
+                        <div className="text-sm text-gray-600">โทร: {address.phone}</div>
                       ) : null}
                     </div>
                   </label>
@@ -448,8 +449,8 @@ function CheckoutAddressForm({ user, host, onChange }) {
                 className="mt-1"
               />
               <div className="flex-1">
-                <span className="font-medium text-gray-900">Use a new address</span>
-                <p className="text-sm text-gray-600">Fill in the form below to save and use a different address.</p>
+                <span className="font-medium text-gray-900">ใช้ที่อยู่ใหม่</span>
+                <p className="text-sm text-gray-600">กรอกแบบฟอร์มด้านล่างเพื่อบันทึกและใช้ที่อยู่นี้</p>
               </div>
             </label>
 
@@ -457,58 +458,58 @@ function CheckoutAddressForm({ user, host, onChange }) {
               <div className="space-y-4 border border-gray-200 rounded-lg p-4 bg-white">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Recipient</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้รับ</label>
                     <input
                       type="text"
                       name="recipient_name"
                       value={form.recipient_name}
                       onChange={handleFormChange}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-                      placeholder="Recipient name"
+                      placeholder="ชื่อ-นามสกุลผู้รับ"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทร</label>
                     <input
                       type="tel"
                       name="phone"
                       value={form.phone}
                       onChange={handleFormChange}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-                      placeholder="0xxxxxxxxx"
+                      placeholder="0XXXXXXXXX"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ที่อยู่</label>
                   <textarea
                     name="address"
                     value={form.address}
                     onChange={handleFormChange}
                     rows={3}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-                    placeholder="House number, street, village"
+                    placeholder="บ้านเลขที่ ถนน หมู่บ้าน"
                   />
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Province</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">จังหวัด</label>
                     <select
                       name="province_id"
                       value={form.province_id}
                       onChange={handleFormChange}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
                     >
-                      <option value="">Select province</option>
+                      <option value="">เลือกจังหวัด</option>
                       {provinceOptions.map((item) => (
                         <option key={item.id} value={item.id}>{item.name_th}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">อำเภอ/เขต</label>
                     <select
                       name="district_id"
                       value={form.district_id}
@@ -516,14 +517,14 @@ function CheckoutAddressForm({ user, host, onChange }) {
                       className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
                       disabled={!form.province_id}
                     >
-                      <option value="">Select district</option>
+                      <option value="">เลือกอำเภอ/เขต</option>
                       {districtOptions.map((item) => (
                         <option key={item.id} value={item.id}>{item.name_th}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Subdistrict</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ตำบล/แขวง</label>
                     <select
                       name="subdistrict_id"
                       value={form.subdistrict_id}
@@ -531,7 +532,7 @@ function CheckoutAddressForm({ user, host, onChange }) {
                       className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
                       disabled={!form.district_id}
                     >
-                      <option value="">Select subdistrict</option>
+                      <option value="">เลือกตำบล/แขวง</option>
                       {subdistrictOptions.map((item) => (
                         <option key={item.id} value={item.id}>{item.name_th}</option>
                       ))}
@@ -541,7 +542,7 @@ function CheckoutAddressForm({ user, host, onChange }) {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">รหัสไปรษณีย์</label>
                     <input
                       type="text"
                       name="postal_code"
@@ -553,14 +554,14 @@ function CheckoutAddressForm({ user, host, onChange }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ป้ายกำกับ</label>
                     <input
                       type="text"
                       name="label"
                       value={form.label}
                       onChange={handleFormChange}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-                      placeholder="Home, Office"
+                      placeholder="เช่น บ้าน, ที่ทำงาน"
                     />
                   </div>
                 </div>
@@ -572,7 +573,7 @@ function CheckoutAddressForm({ user, host, onChange }) {
                     className="inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:bg-gray-400"
                     disabled={saving}
                   >
-                    {saving ? 'Saving...' : 'Save address'}
+                    {saving ? 'กำลังบันทึก...' : 'บันทึกที่อยู่'}
                   </button>
                 </div>
               </div>
@@ -585,21 +586,3 @@ function CheckoutAddressForm({ user, host, onChange }) {
 }
 
 export default CheckoutAddressForm;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

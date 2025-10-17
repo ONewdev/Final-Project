@@ -109,8 +109,102 @@ exports.list = async (req, res) => {
         if (source && ['online', 'store'].includes(String(source))) q.where('source', source);
         if (type && ['income', 'expense'].includes(String(type))) q.where('type', type);
 
+        let rows = await q.orderBy('entry_date', 'asc').orderBy('id', 'asc');
 
-        const rows = await q.orderBy('entry_date', 'asc').orderBy('id', 'asc');
+        // Include online order incomes to align with the report view
+        const includeOnline = (!source || String(source) === 'all') && (!type || String(type).toLowerCase() === 'all' || String(type).toLowerCase() === 'income');
+        if (includeOnline) {
+          try {
+            const hasOrders = await db.schema.hasTable('orders');
+            if (hasOrders) {
+              const DEFAULT_STATUSES = ['approved', 'shipped', 'delivered'];
+              const qOrders = db('orders')
+                .select(['id', 'created_at', 'status', 'total_price', 'product_list'])
+                .whereIn('status', DEFAULT_STATUSES);
+              if (from) qOrders.andWhereRaw('DATE(created_at) >= ?', [from]);
+              if (to) qOrders.andWhereRaw('DATE(created_at) <= ?', [to]);
+              const orders = await qOrders.orderBy('created_at', 'desc');
+
+              const orderIds = orders.map(o => o.id);
+              let itemsByOrder = {};
+              if (orderIds.length) {
+                const hasOrderItems = await db.schema.hasTable('order_items');
+                if (hasOrderItems) {
+                  const itemRows = await db('order_items as oi')
+                    .leftJoin('products as p', 'oi.product_id', 'p.id')
+                    .select([
+                      'oi.order_id',
+                      'oi.product_id',
+                      'oi.quantity',
+                      'oi.price',
+                      db.raw('COALESCE(p.name, "-") as product_name')
+                    ])
+                    .whereIn('oi.order_id', orderIds);
+
+                  itemsByOrder = itemRows.reduce((acc, r) => {
+                    (acc[r.order_id] ||= []).push({
+                      product_id: r.product_id,
+                      product_name: r.product_name,
+                      qty: Number(r.quantity || 0),
+                      price: Number(r.price || 0),
+                    });
+                    return acc;
+                  }, {});
+                }
+              }
+
+              const onlineRows = [];
+              for (const o of orders) {
+                let items = itemsByOrder[o.id] || [];
+                if (!items.length && o.product_list) {
+                  try {
+                    const parsed = typeof o.product_list === 'string' ? JSON.parse(o.product_list) : o.product_list;
+                    if (Array.isArray(parsed)) {
+                      items = parsed.map(x => ({
+                        product_id: x.product_id || null,
+                        product_name: x.product_name || '-',
+                        qty: Number(x.product_qty || x.qty || 0),
+                        price: Number(x.price || 0),
+                      }));
+                    }
+                  } catch { /* ignore */ }
+                }
+
+                const d = new Date(o.created_at);
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const dateStr = `${yyyy}-${mm}-${dd}`;
+
+                if (items.length) {
+                  for (const it of items) {
+                    const amount = Number(it.qty || 0) * Math.abs(Number(it.price || 0));
+                    if (!amount) continue;
+                    const desc = `Order #${o.id} - ${it.product_name || '-'}`;
+                    onlineRows.push({ entry_date: dateStr, type: 'income', source: 'online', description: desc, amount });
+                  }
+                } else {
+                  const total = Math.abs(Number(o.total_price || 0));
+                  if (!total) continue;
+                  onlineRows.push({ entry_date: dateStr, type: 'income', source: 'online', description: `Order #${o.id}`, amount: total });
+                }
+              }
+
+              if (onlineRows.length) {
+                rows = rows.concat(onlineRows);
+                rows.sort((a, b) => {
+                  const da = new Date(a.entry_date).getTime();
+                  const db = new Date(b.entry_date).getTime();
+                  if (da !== db) return da - db;
+                  return String(a.description || '').localeCompare(String(b.description || ''));
+                });
+              }
+            }
+          } catch (e) {
+            console.error('ledger.list includeOnline error:', e);
+          }
+        }
+
         res.json(rows);
     } catch (err) {
         console.error('ledger.list error:', err);
@@ -167,16 +261,106 @@ exports.exportPdf = async (req, res) => {
         if (from) qBuilder.where('entry_date', '>=', from);
         if (to) qBuilder.where('entry_date', '<=', to);
         if (source && ['online', 'store'].includes(String(source))) qBuilder.where('source', source);
-        if (type && ['income', 'expense'].includes(String(type))) qBuilder.where('type', type);
+        if (type && String(type).trim() && String(type).trim().toLowerCase() !== 'all') {
+            qBuilder.where('type', type);
+        }
         if (q && String(q).trim()) {
             const kw = `%${String(q).trim()}%`;
             qBuilder.where((qb) => {
                 qb.where('description', 'like', kw);
-                // ถ้าต้องการค้นหาที่ source/type ด้วย (เป็นอังกฤษ): เปิดบรรทัดด้านล่าง
-                // .orWhere('source', 'like', kw).orWhere('type', 'like', kw);
             });
         }
-        const rows = await qBuilder.orderBy('entry_date', 'asc').orderBy('id', 'asc');
+        let rows = await qBuilder.orderBy('entry_date', 'asc').orderBy('id', 'asc');
+
+        // Include online order incomes to match the UI combined view
+        const includeOnline = (!source || String(source) === 'all') && (!type || String(type).toLowerCase() === 'all' || String(type).toLowerCase() === 'income');
+        if (includeOnline) {
+            const DEFAULT_STATUSES = ['approved', 'shipped', 'delivered'];
+            const qOrders = db('orders')
+                .select(['id', 'created_at', 'status', 'total_price', 'product_list'])
+                .whereIn('status', DEFAULT_STATUSES);
+            if (from) qOrders.andWhereRaw('DATE(created_at) >= ?', [from]);
+            if (to) qOrders.andWhereRaw('DATE(created_at) <= ?', [to]);
+            const orders = await qOrders.orderBy('created_at', 'desc');
+
+            const orderIds = orders.map(o => o.id);
+            let itemsByOrder = {};
+            if (orderIds.length) {
+                const itemRows = await db('order_items as oi')
+                    .leftJoin('products as p', 'oi.product_id', 'p.id')
+                    .select([
+                        'oi.order_id',
+                        'oi.product_id',
+                        'oi.quantity',
+                        'oi.price',
+                        db.raw('COALESCE(p.name, "-") as product_name')
+                    ])
+                    .whereIn('oi.order_id', orderIds);
+
+                itemsByOrder = itemRows.reduce((acc, r) => {
+                    (acc[r.order_id] ||= []).push({
+                        product_id: r.product_id,
+                        product_name: r.product_name,
+                        qty: Number(r.quantity || 0),
+                        price: Number(r.price || 0),
+                    });
+                    return acc;
+                }, {});
+            }
+
+            const onlineRows = [];
+            for (const o of orders) {
+                let items = itemsByOrder[o.id] || [];
+                if (!items.length && o.product_list) {
+                    try {
+                        const parsed = typeof o.product_list === 'string' ? JSON.parse(o.product_list) : o.product_list;
+                        if (Array.isArray(parsed)) {
+                            items = parsed.map(x => ({
+                                product_id: x.product_id || null,
+                                product_name: x.product_name || '-',
+                                qty: Number(x.product_qty || x.qty || 0),
+                                price: Number(x.price || 0),
+                            }));
+                        }
+                    } catch { /* ignore */ }
+                }
+
+                const d = new Date(o.created_at);
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const dateStr = `${yyyy}-${mm}-${dd}`;
+
+                if (items.length) {
+                    for (const it of items) {
+                        const amount = Number(it.qty || 0) * Math.abs(Number(it.price || 0));
+                        if (!amount) continue;
+                        const desc = `Order #${o.id} - ${it.product_name || '-'}`;
+                        onlineRows.push({ entry_date: dateStr, type: 'income', source: 'online', description: desc, amount });
+                    }
+                } else {
+                    const total = Math.abs(Number(o.total_price || 0));
+                    if (!total) continue;
+                    onlineRows.push({ entry_date: dateStr, type: 'income', source: 'online', description: `Order #${o.id}`, amount: total });
+                }
+            }
+
+            let filteredOnline = onlineRows;
+            if (q && String(q).trim()) {
+                const qLower = String(q).trim().toLowerCase();
+                filteredOnline = onlineRows.filter(r => String(r.description || '').toLowerCase().includes(qLower));
+            }
+
+            if (filteredOnline.length) {
+                rows = rows.concat(filteredOnline);
+                rows.sort((a, b) => {
+                    const da = new Date(a.entry_date).getTime();
+                    const db = new Date(b.entry_date).getTime();
+                    if (da !== db) return da - db;
+                    return String(a.description || '').localeCompare(String(b.description || ''));
+                });
+            }
+        }
 
         // ----- Summary -----
         const agg = (arr) => arr.reduce((acc, r) => {
@@ -191,14 +375,28 @@ exports.exportPdf = async (req, res) => {
 
         // ----- PDF -----
         const doc = new PDFDocument({ size: 'A4', margin: 36 }); // 0.5 นิ้ว
-        const fontPath = path.join(__dirname, '../assets/fonts/THSarabunNew.ttf');
-        if (fs.existsSync(fontPath)) doc.font(fontPath);
+        const fontPath = path.join(__dirname, '../fonts/NotoSansThai-Regular.ttf');
+        if (fs.existsSync(fontPath)) {
+            doc.registerFont('thai', fontPath);
+            doc.font('thai');
+        } else {
+            console.error('ไม่พบไฟล์ฟอนต์ภาษาไทย:', fontPath);
+            doc.font('Helvetica');
+        }
+
+        // โลโก้บริษัท (ถ้ามี)
+        const logoPath = path.join(__dirname, '../public/logo.png');
+        const hasLogo = fs.existsSync(logoPath);
 
         const fmtMoney = (n) =>
             new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(Number(n) || 0);
 
         const writeHeader = () => {
-            doc.fontSize(20).text('รายงานรายรับ-รายจ่าย', { align: 'left' });
+            if (hasLogo) {
+                doc.image(logoPath, doc.page.margins.left, doc.page.margins.top, { width: 60 });
+                doc.moveDown(0.5);
+            }
+            doc.font('thai').fontSize(22).fillColor('#0ea5e9').text('รายงานรายรับ-รายจ่าย', hasLogo ? doc.page.margins.left + 70 : doc.page.margins.left, doc.page.margins.top, { align: 'left' });
             doc.moveDown(0.2);
             doc.fontSize(12).fillColor('#555')
                 .text(`ช่วงเวลา: ${from || '-'} ถึง ${to || '-'}`);
@@ -210,27 +408,39 @@ exports.exportPdf = async (req, res) => {
 
         const writeSummary = () => {
             const y0 = doc.y;
-            const boxW = 170, boxH = 50, gap = 14;
+            const boxW = 170, boxH = 54, gap = 14;
             const xStart = doc.page.margins.left;
             const boxes = [
-                { title: 'รวมรายรับ', value: fmtMoney(summary.income) },
-                { title: 'รวมรายจ่าย', value: fmtMoney(summary.expense) },
-                { title: 'สุทธิ', value: fmtMoney(summary.net) },
+                { title: 'รวมรายรับ', value: fmtMoney(summary.income), color: '#16a34a' },
+                { title: 'รวมรายจ่าย', value: fmtMoney(summary.expense), color: '#dc2626' },
+                { title: 'สุทธิ', value: fmtMoney(summary.net), color: summary.net < 0 ? '#dc2626' : '#16a34a' },
             ];
             boxes.forEach((b, i) => {
                 const x = xStart + i * (boxW + gap);
-                doc.roundedRect(x, y0, boxW, boxH, 8).fill('#f6f7fb').stroke('#e5e7eb');
-                doc.fillColor('#374151').fontSize(12).text(b.title, x + 12, y0 + 10, { width: boxW - 24 });
-                doc.fontSize(16).fillColor('#111827').text(b.value, x + 12, y0 + 26, { width: boxW - 24 });
+                doc.roundedRect(x, y0, boxW, boxH, 8).fill('#f6f7fb').stroke('#0ea5e9');
+                doc.fillColor('#374151').font('thai').fontSize(13).text(b.title, x + 12, y0 + 12, { width: boxW - 24 });
+                doc.fontSize(18).fillColor(b.color).text(b.value, x + 12, y0 + 28, { width: boxW - 24 });
             });
             doc.fillColor('#000');
             doc.moveDown(3.5);
         };
 
-        const writeTable = () => {
+        // ฟังก์ชันวาดตาราง (reuse ได้)
+        const writeTableSection = (rows, label) => {
+            // ฟังก์ชันแปลงวันที่เป็นเลขอารบิกปกติ
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '';
+                const d = new Date(dateStr);
+                if (isNaN(d)) return String(dateStr);
+                // yyyy-MM-dd
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            };
+
             const col = [
-                { key: 'entry_date', label: 'วันที่', width: 80, align: 'left' },
-                { key: 'type', label: 'ประเภท', width: 70, align: 'left', map: v => v === 'expense' ? 'รายจ่าย' : 'รายรับ' },
+                { key: 'entry_date', label: 'วันที่', width: 80, align: 'left', map: formatDate },
                 { key: 'source', label: 'ช่องทาง', width: 80, align: 'left', map: v => v === 'online' ? 'ออนไลน์' : 'หน้าร้าน' },
                 { key: 'description', label: 'รายละเอียด', width: 210, align: 'left' },
                 { key: 'amount', label: 'จำนวนเงิน', width: 90, align: 'right', map: v => fmtMoney(v) },
@@ -239,23 +449,25 @@ exports.exportPdf = async (req, res) => {
             // Header strip
             const startX = doc.page.margins.left;
             let y = doc.y;
-            doc.rect(startX, y, col.reduce((s, c) => s + c.width, 0), 24).fill('#0ea5e9');
-            doc.fillColor('#fff').fontSize(12);
+            doc.roundedRect(startX, y, col.reduce((s, c) => s + c.width, 0), 26, 6).fill('#0ea5e9');
+            doc.fillColor('#fff').font('thai').fontSize(13);
             let x = startX;
             col.forEach(c => {
-                doc.text(c.label, x + 8, y + 6, { width: c.width - 16, align: c.align });
+                doc.text(c.label, x + 8, y + 7, { width: c.width - 16, align: c.align });
                 x += c.width;
             });
             doc.fillColor('#000');
-            y += 24;
+            y += 26;
 
             // Rows
             rows.forEach((r, idx) => {
-                const rowH = 24;
-                if (y + rowH > doc.page.height - doc.page.margins.bottom) {
+                const rowH = 25;
+                if (y + rowH > doc.page.height - doc.page.margins.bottom - 40) {
                     doc.addPage();
                     y = doc.page.margins.top;
                 }
+                // เส้นแบ่งระหว่างแถว
+                doc.moveTo(startX, y).lineTo(startX + col.reduce((s, c) => s + c.width, 0), y).stroke('#e5e7eb');
                 if (idx % 2 === 1) {
                     doc.rect(startX, y, col.reduce((s, c) => s + c.width, 0), rowH).fill('#f9fafb');
                     doc.fillColor('#000');
@@ -265,8 +477,8 @@ exports.exportPdf = async (req, res) => {
                     const raw = r[c.key];
                     const val = c.map ? c.map(raw) : raw;
                     const color = (c.key === 'amount' && Number(r.amount) < 0) ? '#dc2626' : (c.key === 'amount' ? '#16a34a' : '#111827');
-                    doc.fillColor(color).fontSize(11)
-                        .text(String(val ?? ''), x + 8, y + 6, { width: c.width - 16, align: c.align, ellipsis: true });
+                    doc.fillColor(color).font('thai').fontSize(12)
+                        .text(String(val ?? ''), x + 8, y + 7, { width: c.width - 16, align: c.align, ellipsis: true });
                     doc.fillColor('#111827');
                     x += c.width;
                 });
@@ -274,28 +486,121 @@ exports.exportPdf = async (req, res) => {
             });
 
             // Footer total bar
-            if (y + 34 > doc.page.height - doc.page.margins.bottom) {
+            if (y + 38 > doc.page.height - doc.page.margins.bottom - 40) {
                 doc.addPage(); y = doc.page.margins.top;
             }
             const totalW = col.reduce((s, c) => s + c.width, 0);
-            doc.rect(startX, y, totalW, 34).fill('#eef2ff');
-            doc.fillColor('#111827').fontSize(12)
-                .text('รวมสุทธิ', startX + 8, y + 10, { width: totalW - col[col.length - 1].width - 16, align: 'right' });
-            doc.fillColor(summary.net < 0 ? '#dc2626' : '#16a34a').fontSize(14)
-                .text(fmtMoney(summary.net), startX + totalW - col[col.length - 1].width + 8, y + 9, { width: col[col.length - 1].width - 16, align: 'right' });
+            doc.roundedRect(startX, y, totalW, 38, 8).fill('#eef2ff');
+            doc.fillColor('#111827').font('thai').fontSize(13)
+                .text('รวมสุทธิ', startX + 8, y + 13, { width: totalW - col[col.length - 1].width - 16, align: 'right' });
+            const totalAmount = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+            doc.fillColor(totalAmount < 0 ? '#dc2626' : '#16a34a').fontSize(16)
+                .text(fmtMoney(totalAmount), startX + totalW - col[col.length - 1].width + 8, y + 12, { width: col[col.length - 1].width - 16, align: 'right' });
             doc.fillColor('#111827');
             doc.moveDown();
         };
 
+        const writeTable = () => {
+            // ฟังก์ชันแปลงวันที่เป็นเลขอารบิกปกติ
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '';
+                const d = new Date(dateStr);
+                if (isNaN(d)) return String(dateStr);
+                // yyyy-MM-dd
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            };
+
+            const col = [
+                { key: 'entry_date', label: 'วันที่', width: 80, align: 'left', map: formatDate },
+                { key: 'type', label: 'ประเภท', width: 70, align: 'left', map: v => v === 'expense' ? 'รายจ่าย' : 'รายรับ' },
+                { key: 'source', label: 'ช่องทาง', width: 80, align: 'left', map: v => v === 'online' ? 'ออนไลน์' : 'หน้าร้าน' },
+                { key: 'description', label: 'รายละเอียด', width: 210, align: 'left' },
+                { key: 'amount', label: 'จำนวนเงิน', width: 90, align: 'right', map: v => fmtMoney(v) },
+            ];
+
+            // Header strip
+            const startX = doc.page.margins.left;
+            let y = doc.y;
+            doc.roundedRect(startX, y, col.reduce((s, c) => s + c.width, 0), 26, 6).fill('#0ea5e9');
+            doc.fillColor('#fff').font('thai').fontSize(13);
+            let x = startX;
+            col.forEach(c => {
+                doc.text(c.label, x + 8, y + 7, { width: c.width - 16, align: c.align });
+                x += c.width;
+            });
+            doc.fillColor('#000');
+            y += 26;
+
+            // Rows
+            rows.forEach((r, idx) => {
+                const rowH = 25;
+                if (y + rowH > doc.page.height - doc.page.margins.bottom - 40) {
+                    doc.addPage();
+                    y = doc.page.margins.top;
+                }
+                // เส้นแบ่งระหว่างแถว
+                doc.moveTo(startX, y).lineTo(startX + col.reduce((s, c) => s + c.width, 0), y).stroke('#e5e7eb');
+                if (idx % 2 === 1) {
+                    doc.rect(startX, y, col.reduce((s, c) => s + c.width, 0), rowH).fill('#f9fafb');
+                    doc.fillColor('#000');
+                }
+                x = startX;
+                col.forEach(c => {
+                    const raw = r[c.key];
+                    const val = c.map ? c.map(raw) : raw;
+                    const color = (c.key === 'amount' && Number(r.amount) < 0) ? '#dc2626' : (c.key === 'amount' ? '#16a34a' : '#111827');
+                    doc.fillColor(color).font('thai').fontSize(12)
+                        .text(String(val ?? ''), x + 8, y + 7, { width: c.width - 16, align: c.align, ellipsis: true });
+                    doc.fillColor('#111827');
+                    x += c.width;
+                });
+                y += rowH;
+            });
+
+            // Footer total bar
+            if (y + 38 > doc.page.height - doc.page.margins.bottom - 40) {
+                doc.addPage(); y = doc.page.margins.top;
+            }
+            const totalW = col.reduce((s, c) => s + c.width, 0);
+            doc.roundedRect(startX, y, totalW, 38, 8).fill('#eef2ff');
+            doc.fillColor('#111827').font('thai').fontSize(13)
+                .text('รวมสุทธิ', startX + 8, y + 13, { width: totalW - col[col.length - 1].width - 16, align: 'right' });
+            doc.fillColor(summary.net < 0 ? '#dc2626' : '#16a34a').fontSize(16)
+                .text(fmtMoney(summary.net), startX + totalW - col[col.length - 1].width + 8, y + 12, { width: col[col.length - 1].width - 16, align: 'right' });
+            doc.fillColor('#111827');
+            doc.moveDown();
+        };
+
+        // Footer: หมายเหตุ/ช่องทางติดต่อ
+        const writeFooter = () => {
+            const y = doc.page.height - doc.page.margins.bottom - 30;
+            doc.font('thai').fontSize(10).fillColor('#555').text('หมายเหตุ: รายงานนี้จัดทำจากข้อมูลจริงในระบบ ณ วันที่สร้างเอกสาร', doc.page.margins.left, y, { align: 'left' });
+            doc.text('ติดต่อฝ่ายบัญชี: 02-xxx-xxxx', doc.page.margins.left, y + 14, { align: 'left' });
+        };
+
         // ---- Stream response ----
         res.setHeader('Content-Type', 'application/pdf');
-        // ชื่อไฟล์ไทย แนะนำ Content-Disposition แบบ attachment พร้อมไฟล์ชื่ออังกฤษสั้น ๆ ปลอดภัยกว่า
-        res.setHeader('Content-Disposition', 'attachment; filename=\"ledger-report.pdf\"');
+        res.setHeader('Content-Disposition', 'attachment; filename="ledger-report.pdf"');
 
         doc.pipe(res);
         writeHeader();
         writeSummary();
-        writeTable();
+        if (req.query.split === 'true') {
+            // แยกตาราง รายรับ/รายจ่าย
+            const incomeRows = rows.filter(r => r.type === 'income');
+            const expenseRows = rows.filter(r => r.type === 'expense');
+            doc.fontSize(16).fillColor('#16a34a').text('รายรับ', { align: 'left' });
+            writeTableSection(incomeRows, 'รายรับ');
+            doc.addPage();
+            doc.fontSize(16).fillColor('#dc2626').text('รายจ่าย', { align: 'left' });
+            writeTableSection(expenseRows, 'รายจ่าย');
+        } else {
+            writeTable();
+        }
+        writeFooter();
         doc.end();
     } catch (err) {
         console.error('ledger.exportPdf error:', err);

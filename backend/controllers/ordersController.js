@@ -363,7 +363,7 @@ exports.createOrder = async (req, res) => {
       customer_id,
       type: 'info',
       title: 'สร้างคำสั่งซื้อสำเร็จ',
-      message: `ออเดอร์ #${orderId} ถูกสร้างเรียบร้อยแล้ว`,
+      message: `คำสั่งซื้อ #${orderId} ถูกสร้างเรียบร้อยแล้ว`,
     });
 
     // ส่ง socket event แจ้งเตือน admin

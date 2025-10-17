@@ -7,7 +7,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { addCartItem, clearCartItems } from "../../services/cartService";
 import { FaHeart, FaRegHeart, FaStar } from "react-icons/fa";
-import { submitRating, addFavorite, removeFavorite } from "../../services/likeFavoriteService";
+import { submitRating, addFavorite, removeFavorite, getRatingSummary } from "../../services/likeFavoriteService";
 
 function Products() {
   useEffect(() => {
@@ -34,6 +34,7 @@ function Products() {
   const [comparison, setComparison] = useState([]);
   const [showCompare, setShowCompare] = useState(false);
   const [productRatings, setProductRatings] = useState({});
+  const [ratingSummaries, setRatingSummaries] = useState({});
   const [favoritedProducts, setFavoritedProducts] = useState({});
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -45,14 +46,18 @@ function Products() {
 
   // โหลดสถานะ like/favorite และเรตติ้งของสินค้าแต่ละตัว
   const fetchStatuses = async () => {
-    if (!user) return;
 
     const ratings = {};
     const favs = {};
+    const summaries = {};
 
     for (const p of products) {
       try {
         // เรียก API เพื่อดึงสถานะการให้คะแนน
+        if (!user) {
+          ratings[p.id] = 0;
+          favs[p.id] = false;
+        } else {
         const ratingRes = await fetch(
           `${host}/api/interactions/rating/status?customer_id=${user.id}&product_id=${p.id}`
         );
@@ -75,14 +80,21 @@ function Products() {
         } else {
           favs[p.id] = false;
         }
+        }
+
+        // Fetch average rating and review count
+        const summary = await getRatingSummary(p.id);
+        summaries[p.id] = summary;
       } catch {
         ratings[p.id] = 0;
         favs[p.id] = false;
+        summaries[p.id] = { avg_rating: 0, rating_count: 0 };
       }
     }
 
     setProductRatings(ratings);
     setFavoritedProducts(favs);
+    setRatingSummaries(summaries);
   };
 
   useEffect(() => {
@@ -238,6 +250,18 @@ function Products() {
 
     fetchProducts();
   }, [host, selectedCategory]);
+
+  // ถ้าหมวดหมู่ที่เลือกถูกตั้งเป็น "ไม่แสดง" ให้รีเซ็ตการเลือก
+  useEffect(() => {
+    if (
+      selectedCategory &&
+      !categories.some(
+        (c) => String(c.category_id) === String(selectedCategory) && (c.status ?? 1) === 1
+      )
+    ) {
+      setSelectedCategory("");
+    }
+  }, [categories, selectedCategory]);
 
   // กรอง + รีเซ็ตหน้า
   useEffect(() => {
@@ -438,11 +462,13 @@ function Products() {
                   }}
                 >
                   <option value="">ทุกหมวดหมู่</option>
-                  {categories.map((cat) => (
-                    <option key={cat.category_id} value={cat.category_id}>
-                      {cat.category_name}
-                    </option>
-                  ))}
+                  {categories
+                    .filter((cat) => (cat.status ?? 1) === 1)
+                    .map((cat) => (
+                      <option key={cat.category_id} value={cat.category_id}>
+                        {cat.category_name}
+                      </option>
+                    ))}
                 </select>
 
                 {/* ค้นหา */}
@@ -572,9 +598,11 @@ function Products() {
                             </button>
                           ))}
                         </div>
-                        <span className="text-xs text-gray-500">
-                          ({productRatings[product.id] || 0}/5)
-                        </span>
+                        <span className="text-xs text-gray-500">คุณให้: {productRatings[product.id] || 0}/5</span>
+                      </div>
+
+                      <div className="text-xs text-gray-600">
+                        ค่าเฉลี่ย: {(ratingSummaries[product.id]?.avg_rating || 0).toFixed(1)}/5 · {ratingSummaries[product.id]?.rating_count || 0} รีวิว
                       </div>
 
                       <div className="flex items-end gap-2">

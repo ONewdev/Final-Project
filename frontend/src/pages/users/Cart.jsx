@@ -122,13 +122,13 @@ function Cart() {
   const handleCheckout = () => {
     const selectedItems = cart.filter(i => selectedIds.has(getItemKey(i)));
     if (selectedItems.length === 0) {
-      alert("????????????????????????? 1 ??????");
+      alert("กรุณาเลือกสินค้าก่อนดำเนินการชำระเงิน");
       return;
     }
     const itemsForCheckout = selectedItems.map(i => ({
       ...i,
       id: i.product_id || i.id,
-      name: i.name || i.product_name || i.title || "?????? #" + (i.product_id || i.id),
+      name: i.name || i.product_name || i.title || "สินค้า #" + (i.product_id || i.id),
     }));
     navigate("/users/checkout", { state: { items: itemsForCheckout } });
   };

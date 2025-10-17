@@ -3,16 +3,58 @@ const router = express.Router();
 const db = require('../db');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const paymentController = require('../controllers/paymentController');
+let io;
+try {
+  io = require('../app').io;
+} catch (_) {
+  io = null;
+}
+
+// Ensure upload directory exists and configure disk storage
+const paymentsUploadDir = path.join(__dirname, '../public/uploads/payments');
+try {
+  if (!fs.existsSync(paymentsUploadDir)) {
+    fs.mkdirSync(paymentsUploadDir, { recursive: true });
+  }
+} catch (_) { /* ignore */ }
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, paymentsUploadDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
 
 const upload = multer({
-  dest: path.join(__dirname, '../public/uploads/payments')
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (_req, file, cb) => {
+    const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.mimetype);
+    cb(ok ? null : new Error('Invalid file type'), ok);
+  },
 });
 
 // รองรับทั้ง proof_image และ image
 function flexibleSingleFile(req, res, next) {
-  const field = req.headers['content-type']?.includes('multipart') && req.body?.image ? 'image' : 'proof_image';
-  return upload.single(field)(req, res, next);
+  // รองรับทั้งสอง field
+  const uploadFields = upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'proof_image', maxCount: 1 }
+  ]);
+  uploadFields(req, res, function (err) {
+    // log เพื่อ debug
+    console.log('Uploaded files:', req.files);
+    // ถ้ามีไฟล์ image หรือ proof_image ให้ map ไปที่ req.file เพื่อให้ controller ใช้งานได้เหมือนเดิม
+    if (req.files?.image?.[0]) {
+      req.file = req.files.image[0];
+    } else if (req.files?.proof_image?.[0]) {
+      req.file = req.files.proof_image[0];
+    }
+    next(err);
+  });
 }
 
 // แจ้งชำระเงิน (POST /api/payments)
@@ -44,6 +86,17 @@ router.put('/:id/status', async (req, res) => {
         created_at: new Date()
       });
     }
+    // after status change, emit updated pending count for admin sidebar badges
+    try {
+      if (io) {
+        const row = await db('payments').where({ status: 'pending' }).count({ c: '*' }).first();
+        const pendingCount = Number(row?.c || row?.count || 0);
+        io.emit('paymentOrderCheck:unread:set', pendingCount);
+      }
+    } catch (e) {
+      console.warn('emit paymentOrderCheck:unread:set failed:', e?.message || e);
+    }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'อัปเดตสถานะล้มเหลว' });

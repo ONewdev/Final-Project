@@ -34,7 +34,9 @@ function AddressManager({ userId, host, defaultRecipient = '', defaultPhone = ''
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${host}/api/customers/${targetId}/addresses`, {
+      // Use relative API path to leverage Vite proxy in dev
+      const url = `/api/customers/${targetId}/addresses`;
+      const response = await fetch(url, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -59,11 +61,11 @@ function AddressManager({ userId, host, defaultRecipient = '', defaultPhone = ''
   }, [userId, fetchAddresses]);
 
   useEffect(() => {
-    if (!host) return;
+    if (!host && !import.meta.env.DEV) return;
     let active = true;
     const loadProvinces = async () => {
       try {
-        const response = await fetch(`${host}/api/customers/provinces`);
+        const response = await fetch(`/api/customers/provinces`);
         if (!response.ok) throw new Error('Failed to load provinces');
         const payload = await response.json();
         if (active) setProvinces(Array.isArray(payload) ? payload : []);
@@ -90,7 +92,7 @@ function AddressManager({ userId, host, defaultRecipient = '', defaultPhone = ''
     let active = true;
     const loadDistricts = async () => {
       try {
-        const response = await fetch(`${host}/api/customers/districts?province_id=${form.province_id}`);
+        const response = await fetch(`/api/customers/districts?province_id=${form.province_id}`);
         if (!response.ok) throw new Error('Failed to load districts');
         const payload = await response.json();
         if (!active) return;
@@ -121,7 +123,7 @@ function AddressManager({ userId, host, defaultRecipient = '', defaultPhone = ''
     let active = true;
     const loadSubdistricts = async () => {
       try {
-        const response = await fetch(`${host}/api/customers/subdistricts?district_id=${form.district_id}`);
+        const response = await fetch(`/api/customers/subdistricts?district_id=${form.district_id}`);
         if (!response.ok) throw new Error('Failed to load subdistricts');
         const payload = await response.json();
         if (!active) return;
@@ -242,8 +244,8 @@ function AddressManager({ userId, host, defaultRecipient = '', defaultPhone = ''
       };
 
       const url = form.id
-        ? `${host}/api/customers/${userId}/addresses/${form.id}`
-        : `${host}/api/customers/${userId}/addresses`;
+        ? `/api/customers/${userId}/addresses/${form.id}`
+        : `/api/customers/${userId}/addresses`;
       const method = form.id ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -272,7 +274,7 @@ function AddressManager({ userId, host, defaultRecipient = '', defaultPhone = ''
     const token = localStorage.getItem('token');
     setLoading(true);
     try {
-      const response = await fetch(`${host}/api/customers/${userId}/addresses/${addressId}/default`, {
+      const response = await fetch(`/api/customers/${userId}/addresses/${addressId}/default`, {
         method: 'PATCH',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include',

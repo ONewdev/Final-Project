@@ -1,188 +1,301 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DataTable from 'react-data-table-component';
-
+import { FaSearch, FaTimes, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 const host = import.meta.env.VITE_HOST || '';
 
-
 export default function MaterialsAdmin() {
-    const [rows, setRows] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
+  // modal state
+  const emptyForm = useMemo(() => ({ id: null, code: '', name: '' }), []);
+  const [form, setForm] = useState(emptyForm);
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-    // modal state
-    const emptyForm = useMemo(() => ({ id: null, code: '', name: '' }), []);
-    const [form, setForm] = useState(emptyForm);
-    const [showModal, setShowModal] = useState(false);
-    const [saving, setSaving] = useState(false);
+  // search state
+  const [search, setSearch] = useState('');
 
+  const fetchList = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${host}/api/materials`);
+      if (!res.ok) throw new Error('Fetch failed');
+      const data = await res.json();
+      setRows(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError('โหลดข้อมูลไม่สำเร็จ');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const fetchList = async () => {
-        setLoading(true);
-        setError('');
+  const toggleStatus = async (row) => {
+    const next = (row.status === 0) ? 1 : 0;
+    try {
+      const res = await fetch(`${host}/api/materials/${row.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Update failed');
+      setRows((prev) => prev.map(r => r.id === row.id ? { ...r, status: data.status } : r));
+    } catch (e) {
+      alert('อัปเดตสถานะไม่สำเร็จ');
+    }
+  };
+
+  useEffect(() => { fetchList(); }, []);
+
+  const openCreate = () => {
+    setForm(emptyForm);
+    setShowModal(true);
+  };
+
+  const openEdit = (r) => {
+    setForm({ id: r.id, code: r.code || '', name: r.name || '' });
+    setShowModal(true);
+  };
+
+  const onDelete = async (r) => {
+    if (!confirm(`ลบรายการนี้หรือไม่? (ID: ${r.id})`)) return;
+    try {
+      const res = await fetch(`${host}/api/materials/${r.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      await fetchList();
+      alert('ลบสำเร็จ');
+    } catch (err) {
+      alert('ลบไม่สำเร็จ');
+    }
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    // ★ ถ้าเป็นโหมดสร้าง: ต้องกรอก code และ name
+    // ★ ถ้าเป็นโหมดแก้ไข: ห้ามแก้ code และจะส่งเฉพาะ name
+    const isEdit = !!form.id;
+
+    if (!isEdit && (!form.code.trim() || !form.name.trim())) {
+      alert('กรอก code และ name ให้ครบ');
+      return;
+    }
+    if (isEdit && !form.name.trim()) {
+      alert('กรอก name ให้ครบ');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const url = isEdit ? `${host}/api/materials/${form.id}` : `${host}/api/materials`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      // ★ โหมดแก้ไข: ส่งเฉพาะ name (ไม่ส่ง code)
+      const payload = isEdit
+        ? { name: form.name.trim() }                      // ★
+        : { code: form.code.trim(), name: form.name.trim() };
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      await fetchList();
+      setShowModal(false);
+    } catch (err) {
+      alert('บันทึกไม่สำเร็จ');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // filter rows by search term (code/name)
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => {
+      const code = (r.code || '').toString().toLowerCase();
+      const name = (r.name || '').toString().toLowerCase();
+      return code.includes(q) || name.includes(q);
+    });
+  }, [rows, search]);
+
+  // DataTable columns
+  const columns = [
+    {
+      name: 'ลำดับ',
+      width: '80px',
+      center: true,
+      cell: (row, index) => <span>{index + 1}</span>,
+    },
+    {
+      name: 'สถานะ',
+      width: '140px',
+      selector: row => (row.status === 0 ? 'ไม่แสดง' : 'แสดง'),
+      cell: (row) => (
+        <span className={`badge ${row.status === 0 ? 'bg-secondary' : 'bg-success'}`}>
+          {row.status === 0 ? 'ไม่แสดง' : 'แสดง'}
+        </span>
+      ),
+      sortable: true,
+    },
+    {
+      name: 'รหัส (code)',
+      selector: row => row.code,
+      sortable: true,
+      width: '160px',
+    },
+    {
+      name: 'ชื่อ (name)',
+      selector: row => row.name,
+      sortable: true,
+    },
+    {
+      name: 'สร้างเมื่อ (created_at)',
+      selector: row => {
         try {
-            const res = await fetch(`${host}/api/materials`);
-            if (!res.ok) throw new Error('Fetch failed');
-            const data = await res.json();
-            setRows(Array.isArray(data) ? data : []);
-        } catch (err) {
-            setError('โหลดข้อมูลไม่สำเร็จ');
-        } finally {
-            setLoading(false);
+          return row.created_at ? new Date(row.created_at).toLocaleString('th-TH') : '-';
+        } catch {
+          return row.created_at ?? '-';
         }
-    };
-
-    useEffect(() => { fetchList(); }, []);
-
-
-    const openCreate = () => {
-        setForm(emptyForm);
-        setShowModal(true);
-    };
-
-
-    const openEdit = (r) => {
-        setForm({ id: r.id, code: r.code || '', name: r.name || '' });
-        setShowModal(true);
-    };
-
-
-    const onDelete = async (r) => {
-        if (!confirm(`ลบรายการนี้หรือไม่? (ID: ${r.id})`)) return;
-        try {
-            const res = await fetch(`${host}/api/materials/${r.id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Delete failed');
-            await fetchList();
-            alert('ลบสำเร็จ');
-        } catch (err) {
-            alert('ลบไม่สำเร็จ');
-        }
-    };
-
-    const onSubmit = async (e) => {
-        e.preventDefault();
-        if (!form.code.trim() || !form.name.trim()) {
-            alert('กรอก code และ name ให้ครบ');
-            return;
-        }
-        setSaving(true);
-        try {
-            const payload = { code: form.code.trim(), name: form.name.trim() };
-            const isEdit = !!form.id;
-            const url = isEdit ? `${host}/api/materials/${form.id}` : `${host}/api/materials`;
-            const method = isEdit ? 'PUT' : 'POST';
-            const res = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (!res.ok) throw new Error('Save failed');
-            await fetchList();
-            setShowModal(false);
-        } catch (err) {
-            alert('บันทึกไม่สำเร็จ');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    // DataTable columns
-    const columns = [
-        {
-            name: 'ลำดับ',
-            width: '80px',
-            center: true,
-            cell: (row, index) => <span>{index + 1}</span>,
-        },
-        {
-            name: 'รหัส (code)',
-            selector: row => row.code,
-            sortable: true,
-            width: '160px',
-        },
-        {
-            name: 'ชื่อ (name)',
-            selector: row => row.name,
-            sortable: true,
-        },
-        {
-            name: 'สร้างเมื่อ (created_at)',
-            selector: row => new Date(row.created_at).toLocaleString('th-TH'),
-            sortable: true,
-            width: '200px',
-        },
-        {
-            name: 'การจัดการ',
-            width: '160px',
-            right: true,
-            cell: (row) => (
-                <div className="d-flex justify-content-end gap-2">
-                    <button className="btn btn-sm btn-primary" onClick={() => openEdit(row)}>แก้ไข</button>
-                    <button className="btn btn-sm btn-outline-danger" onClick={() => onDelete(row)}>ลบ</button>
-                </div>
-            ),
-        },
-    ];
-
-    return (
-        <div className="container py-4" style={{ fontFamily: 'Kanit, sans-serif' }}>
-            <div className="d-flex align-items-center justify-content-between mb-3">
-                <h2 className="m-0">จัดการวัสดุ (Materials)</h2>
-                <button className="btn btn-success" onClick={openCreate}>+ เพิ่มวัสดุ</button>
-            </div>
-
-            {error && <div className="alert alert-danger py-2">{error}</div>}
-
-            <DataTable
-                columns={columns}
-                data={rows}
-                progressPending={loading}
-                pagination
-                highlightOnHover
-                pointerOnHover
-                noDataComponent={<div className="py-3">ไม่พบข้อมูล</div>}
-            />
-
-            {/* Modal แบบง่าย */}
-            {showModal && (
-                <div className="modal d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,0.4)' }}>
-                    <div className="modal-dialog">
-                        <div className="modal-content">
-                            <form onSubmit={onSubmit}>
-                                <div className="modal-header">
-                                    <h5 className="modal-title">{form.id ? 'แก้ไขวัสดุ' : 'เพิ่มวัสดุ'}</h5>
-                                    <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
-                                </div>
-                                <div className="modal-body">
-                                    <div className="mb-3">
-                                        <label className="form-label">รหัส (code) <span className="text-danger">*</span></label>
-                                        <input
-                                            className="form-control"
-                                            value={form.code}
-                                            onChange={(e) => setForm({ ...form, code: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="mb-3">
-                                        <label className="form-label">ชื่อ (name) <span className="text-danger">*</span></label>
-                                        <input
-                                            className="form-control"
-                                            value={form.name}
-                                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="modal-footer">
-                                    <button type="button" className="btn btn-light" onClick={() => setShowModal(false)}>ยกเลิก</button>
-                                    <button type="submit" className="btn btn-primary" disabled={saving}>
-                                        {saving ? 'กำลังบันทึก...' : 'บันทึก'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            )}
+      },
+      sortable: true,
+      width: '200px',
+    },
+    {
+      name: 'สลับสถานะ',
+      width: '140px',
+      right: true,
+      cell: (row) => (
+        <button
+          className={`btn btn-sm ${row.status === 0 ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+          title={row.status === 0 ? 'แสดง' : 'ไม่แสดง'}
+          onClick={() => toggleStatus(row)}
+        >
+          {row.status === 0 ? <FaEye /> : <FaEyeSlash />}
+        </button>
+      ),
+    },
+    {
+      name: 'การจัดการ',
+      width: '160px',
+      right: true,
+      cell: (row) => (
+        <div className="d-flex justify-content-end gap-2">
+          <button className="btn btn-sm btn-primary" onClick={() => openEdit(row)}>แก้ไข</button>
+          <button className="btn btn-sm btn-outline-danger" onClick={() => onDelete(row)}>ลบ</button>
         </div>
-    );
+      ),
+    },
+  ];
+
+  return (
+    <div className="container py-4" style={{ fontFamily: 'Kanit, sans-serif' }}>
+      {/* Header: ชื่อหน้า + ปุ่มเพิ่ม + ค้นหา */}
+      <div className="d-flex align-items-center mb-3">
+        <h2 className="m-0">รายการรายจ่าย</h2>
+
+        <div className="d-flex align-items-center gap-2 ms-auto">
+          {/* Search with icon */}
+          <div className="position-relative" style={{ width: 320, maxWidth: '100%' }}>
+            <FaSearch
+              size={14}
+              className="position-absolute"
+              style={{ left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }}
+              aria-hidden="true"
+            />
+            <input
+              className="form-control"
+              style={{ paddingLeft: 32, paddingRight: 32 }}
+              placeholder="ค้นหา: รหัส (code) หรือ ชื่อ (name)"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="ค้นหาวัสดุ"
+            />
+            {!!search && (
+              <button
+                type="button"
+                className="btn btn-link p-0 position-absolute"
+                onClick={() => setSearch('')}
+                style={{ right: 8, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}
+                title="ล้างคำค้น"
+                aria-label="ล้างคำค้น"
+              >
+                <FaTimes />
+              </button>
+            )}
+          </div>
+
+          <button className="btn btn-success" onClick={openCreate}>+ เพิ่มรายการ</button>
+        </div>
+      </div>
+
+      {error && <div className="alert alert-danger py-2">{error}</div>}
+
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        progressPending={loading}
+        pagination
+        highlightOnHover
+        pointerOnHover
+        persistTableHead
+        noDataComponent={
+          <div className="py-3">
+            {search ? 'ไม่พบข้อมูลที่ตรงกับคำค้น' : 'ไม่พบข้อมูล'}
+          </div>
+        }
+      />
+
+      {/* Modal */}
+      {showModal && (
+        <div className="modal d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <form onSubmit={onSubmit}>  
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    {form.id ? 'แก้ไขรายการ (ไม่สามารถแก้รหัสได้)' : 'เพิ่มรายการ'}
+                  </h5>
+                  <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
+                </div>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label className="form-label">
+                      รหัส (code) <span className="text-danger">*</span>{' '}
+                      {form.id && <small className="text-muted">— แก้ไขไม่ได้</small>}
+                    </label>
+                    <input
+                      className="form-control"
+                      value={form.code}
+                      onChange={(e) => setForm({ ...form, code: e.target.value })}
+                      disabled={!!form.id}            // ★ แก้ไข: ปิดการแก้รหัสเมื่อมี id
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">ชื่อ (name) <span className="text-danger">*</span></label>
+                    <input
+                      className="form-control"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-light" onClick={() => setShowModal(false)}>ยกเลิก</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                    {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

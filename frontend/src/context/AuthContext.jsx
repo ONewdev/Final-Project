@@ -1,66 +1,62 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const u = localStorage.getItem('user');
-    return u ? JSON.parse(u) : null;
+    try { const u = localStorage.getItem('user'); return u ? JSON.parse(u) : null; } catch { return null; }
   });
   const [admin, setAdmin] = useState(() => {
-    const a = localStorage.getItem('admin_user');
-    return a ? JSON.parse(a) : null;
+    try { const a = localStorage.getItem('admin_user'); return a ? JSON.parse(a) : null; } catch { return null; }
   });
 
-  // Fetch user data from backend on mount if user exists
+  // Validate auth on mount: prefer JWT, fallback to session; clear stale local user
   useEffect(() => {
-    const fetchUserData = async () => {
+    const checkAuth = async () => {
       const token = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
-      
-      if (token && storedUser) {
-        try {
-          const userData = JSON.parse(storedUser);
-          let host = import.meta.env.VITE_HOST;
-          if (!host) host = window.location.origin.replace(/:\d+$/, ':3001');
-          const response = await fetch(`${host}/api/customers/profile`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
+      let host = import.meta.env.VITE_HOST;
+      if (!host && typeof window !== 'undefined') host = window.location.origin.replace(/:\\d+$/, ':3001');
+      const stored = (() => { try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; } })();
+
+      try {
+        if (token && stored) {
+          const res = await fetch(`${host}/api/customers/profile`, {
+            headers: { Authorization: `Bearer ${token}` },
             credentials: 'include'
           });
-          if (response.ok) {
-            const updatedUser = await response.json();
-            setUser(updatedUser);
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-          } else {
-            // ถ้า token ไม่ถูกต้อง ให้ล้างข้อมูล
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setUser(null);
+          if (res.ok) {
+            const updated = await res.json();
+            setUser(updated);
+            try { localStorage.setItem('user', JSON.stringify(updated)); } catch {}
+            return;
           }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          // ถ้าเกิด error ให้ล้างข้อมูล
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setUser(null);
         }
+
+        if (stored) {
+          const resMe = await fetch(`${host}/api/customers/me`, { credentials: 'include' });
+          if (resMe.ok) {
+            setUser(stored);
+            return;
+          }
+        }
+
+        // Clear stale
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
+      } catch {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
       }
     };
-
-    fetchUserData();
+    checkAuth();
   }, []);
 
   useEffect(() => {
-    // sync user/admin เมื่อมีการเปลี่ยนแปลง localStorage (เช่น login/logout)
     const handleUserChanged = () => {
-      const u = localStorage.getItem('user');
-      setUser(u ? JSON.parse(u) : null);
-      const a = localStorage.getItem('admin_user');
-      setAdmin(a ? JSON.parse(a) : null);
+      try { const u = localStorage.getItem('user'); setUser(u ? JSON.parse(u) : null); } catch { setUser(null); }
+      try { const a = localStorage.getItem('admin_user'); setAdmin(a ? JSON.parse(a) : null); } catch { setAdmin(null); }
     };
     window.addEventListener('userChanged', handleUserChanged);
     return () => window.removeEventListener('userChanged', handleUserChanged);
@@ -76,3 +72,4 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+

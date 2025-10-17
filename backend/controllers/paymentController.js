@@ -1,5 +1,11 @@
 const db = require('../db');
 const knex = require('../db');
+let io;
+try {
+  io = require('../app').io;
+} catch (_) {
+  io = null;
+}
 
 // 1. บันทึกข้อมูลการชำระเงิน
 exports.createPayment = async (req, res) => {
@@ -25,6 +31,17 @@ exports.createPayment = async (req, res) => {
       await db('products')
         .where({ id: order.product_id })
         .decrement('quantity', order.quantity);
+    }
+
+    // emit pending count for admin sidebar badge (standard orders)
+    try {
+      if (io) {
+        const row = await db('payments').where({ status: 'pending' }).count({ c: '*' }).first();
+        const pendingCount = Number(row?.c || row?.count || 0);
+        io.emit('paymentOrderCheck:unread:set', pendingCount);
+      }
+    } catch (e) {
+      console.warn('emit paymentOrderCheck:unread:set failed:', e?.message || e);
     }
 
     res.json({ success: true, id });
@@ -64,6 +81,17 @@ exports.updatePaymentStatus = async (req, res) => {
     await db('payments').where({ id }).update({
       status
     });
+
+    // broadcast updated pending count for admin sidebar badges
+    try {
+      if (io) {
+        const row = await db('payments').where({ status: 'pending' }).count({ c: '*' }).first();
+        const pendingCount = Number(row?.c || row?.count || 0);
+        io.emit('paymentOrderCheck:unread:set', pendingCount);
+      }
+    } catch (e) {
+      console.warn('emit paymentOrderCheck:unread:set failed:', e?.message || e);
+    }
 
     res.json({ success: true });
   } catch (error) {

@@ -6,6 +6,16 @@ import { useAuth } from '../context/AuthContext';
 
 const host = import.meta.env.VITE_HOST || '';
 
+/* ====== THEME ====== */
+const BRAND = '#16a34a';          // เขียวหลัก
+const BRAND_DARK = '#15803d';
+const BRAND_GRAD_1 = '#22c55e';
+const BRAND_GRAD_2 = '#16a34a';
+const SURFACE = '#ffffff';
+const BORDER = '#e5e7eb';
+const MUTED = '#6b7280';
+const TEXT = '#111827';
+
 function toMeters(value, unit) {
   const n = parseFloat(String(value || ''));
   if (isNaN(n) || n <= 0) return 0;
@@ -15,6 +25,7 @@ function toMeters(value, unit) {
 function getCartKey(user) {
   return user ? `custom_cart_${user.id}` : 'custom_cart_guest';
 }
+
 function readCart(user) {
   try {
     const raw = localStorage.getItem(getCartKey(user));
@@ -127,6 +138,7 @@ function Custom() {
     };
     return calculatePrice(input);
   }, [productType, form, parsed, sizeString]);
+
   useEffect(() => setEstimatedPrice(autoEstimated), [autoEstimated]);
 
   const handleChange = (e) => {
@@ -147,19 +159,48 @@ function Custom() {
   const [districtId, setDistrictId] = useState('');
   const [subdistrictId, setSubdistrictId] = useState('');
   const [postalCode, setPostalCode] = useState('');
+  const [postalCodeTouched, setPostalCodeTouched] = useState(false);
   const [addressLine, setAddressLine] = useState(''); // บ้านเลขที่/ถนน/จุดสังเกต
   const [phone, setPhone] = useState('');
 
   const [shippingFee, setShippingFee] = useState(0);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  // Provinces for delivery (auto-select Songkhla)
+  const [provinces, setProvinces] = useState([]);
+  const [selectedProvinceId, setSelectedProvinceId] = useState(null);
+
+  // Load provinces when switching to delivery and preselect Songkhla
+  useEffect(() => {
+    let ignore = false;
+    async function loadProvinces() {
+      if (deliveryMethod !== 'delivery') return;
+      try {
+        const list = await fetchFlexible(`${host}/api/provinces`);
+        if (ignore) return;
+        const arr = Array.isArray(list) ? list : [];
+        setProvinces(arr);
+        const songkhla = arr.find(p => String(p.name_th || '').includes('สงขลา'));
+        const chosen = songkhla?.id || arr?.[0]?.id || null;
+        setSelectedProvinceId(chosen);
+      } catch (e) {
+        console.error('fetch provinces error', e);
+        if (!ignore) {
+          setProvinces([]);
+          setSelectedProvinceId(null);
+        }
+      }
+    }
+    loadProvinces();
+    return () => { ignore = true; };
+  }, [deliveryMethod]);
 
   // โหลดรายชื่ออำเภอ (เชียงราย) เมื่อเลือกจัดส่ง
   useEffect(() => {
     let ignore = false;
     async function run() {
-      if (deliveryMethod !== 'delivery') return;
+      if (deliveryMethod !== 'delivery' || !selectedProvinceId) return;
       try {
-        const list = await fetchFlexible(`${host}/api/districts?province_id=${provinceId}`);
+        const list = await fetchFlexible(`${host}/api/districts?province_id=${selectedProvinceId}&only_active=1`);
         if (!ignore) setDistricts(list);
       } catch (e) {
         console.error('fetch districts error', e);
@@ -168,7 +209,7 @@ function Custom() {
     }
     run();
     return () => { ignore = true; };
-  }, [deliveryMethod, provinceId]);
+  }, [deliveryMethod, selectedProvinceId]);
 
   // โหลดตำบลเมื่อเปลี่ยนอำเภอ
   useEffect(() => {
@@ -178,10 +219,11 @@ function Custom() {
         setSubdistricts([]);
         setSubdistrictId('');
         setPostalCode('');
+        setPostalCodeTouched(false);
         return;
       }
       try {
-        const list = await fetchFlexible(`${host}/api/subdistricts?district_id=${districtId}`);
+        const list = await fetchFlexible(`${host}/api/subdistricts?district_id=${districtId}&only_active=1`);
         if (!ignore) setSubdistricts(list);
       } catch (e) {
         console.error('fetch subdistricts error', e);
@@ -194,10 +236,12 @@ function Custom() {
 
   // อัปเดต postcode อัตโนมัติเมื่อเลือกตำบล
   useEffect(() => {
-    if (!subdistrictId) { setPostalCode(''); return; }
+    if (!subdistrictId) { setPostalCode(''); setPostalCodeTouched(false); return; }
     const sd = subdistricts.find(s => String(s.id) === String(subdistrictId));
-    setPostalCode(sd?.postal_code || '');
-  }, [subdistrictId, subdistricts]);
+    if (!postalCodeTouched) {
+      setPostalCode(sd?.postal_code || '');
+    }
+  }, [subdistrictId, subdistricts, postalCodeTouched]);
 
   // ขอใบเสนอราคา (ค่าส่ง)
   useEffect(() => {
@@ -222,7 +266,7 @@ function Custom() {
     return () => { ignore = true; };
   }, [deliveryMethod, districtId, subdistrictId]);
 
-  // ====== เพิ่มลงตะกร้า (เดิม) ======
+  // ====== เพิ่มลงตะกร้า ======
   const handleAddToCart = async () => {
     if (!form.category || !form.width || !form.height || !form.color) {
       Swal.fire({ icon: 'warning', title: 'กรอกข้อมูลไม่ครบ', text: 'ประเภทสินค้า / ขนาด / สี ต้องไม่ว่าง' });
@@ -278,7 +322,7 @@ function Custom() {
     });
   };
 
-  // ====== ฟังก์ชันจัดการตะกร้า (เดิม) ======
+  // ====== ฟังก์ชันจัดการตะกร้า ======
   const removeCartItem = (id) => {
     const next = cart.filter(i => i.id !== id);
     setCart(next);
@@ -313,7 +357,7 @@ function Custom() {
   const cartSubtotal = cart.reduce((sum, i) => sum + (Number(i.estimatedPrice) || 0), 0);
   const grandTotal = cartSubtotal + (deliveryMethod === 'delivery' ? Number(shippingFee || 0) : 0);
 
-  // ====== ส่งคำสั่งทำ (ตะกร้าทั้งหมด) พร้อมข้อมูลจัดส่ง (ใหม่) ======
+  // ====== ส่งคำสั่งทำ (ทั้งหมด) ======
   const handleSubmitCart = async () => {
     if (!user) {
       Swal.fire({
@@ -323,7 +367,7 @@ function Custom() {
         confirmButtonText: 'เข้าสู่ระบบ',
         showCancelButton: true,
         cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#16a34a',
+        confirmButtonColor: BRAND,
         cancelButtonColor: '#dc2626'
       }).then((result) => {
         if (result.isConfirmed) navigate('/login');
@@ -335,7 +379,6 @@ function Custom() {
       return;
     }
 
-    // ตรวจข้อมูลจัดส่งเมื่อเลือกแบบ "จัดส่ง"
     if (deliveryMethod === 'delivery') {
       if (!districtId || !subdistrictId || !addressLine || !phone) {
         Swal.fire({ icon: 'warning', title: 'ข้อมูลจัดส่งไม่ครบ', text: 'กรุณาเลือกอำเภอ/ตำบล และกรอกที่อยู่/เบอร์โทร' });
@@ -350,9 +393,8 @@ function Custom() {
     setLoading(true);
     try {
       const results = await Promise.allSettled(
-        cart.map(async (item, idx) => {
+        cart.map(async (item) => {
           const payload = {
-            // ===== ของเดิม =====
             category: item.category_id,
             width: item.width,
             height: item.height,
@@ -372,14 +414,13 @@ function Custom() {
             priceClient: item.estimatedPrice,
             user_id: user.id,
 
-            // ===== ของใหม่: จัดส่ง/รับหน้าร้าน =====
-            shipping_method: deliveryMethod, // 'pickup' | 'delivery'
-            shipping_fee: deliveryMethod === 'delivery' ? Number(shippingFee || 0) : 0, // (ส่งไปทุกรายการ ฝั่งหลังบ้านตัดสินใจรวมครั้งเดียว/เฉลี่ยเอง)
+            shipping_method: deliveryMethod,
+            shipping_fee: deliveryMethod === 'delivery' ? Number(shippingFee || 0) : 0,
             shipping_address: deliveryMethod === 'delivery'
-              ? `${addressLine}\n${(subdistricts.find(s=>String(s.id)===String(subdistrictId))?.name_th) || ''}, ${(districts.find(d=>String(d.id)===String(districtId))?.name_th) || ''}, เชียงราย, ${postalCode || ''}`
+              ? `${addressLine}\n${(subdistricts.find(s => String(s.id) === String(subdistrictId))?.name_th) || ''}, ${(districts.find(d => String(d.id) === String(districtId))?.name_th) || ''}, เชียงราย, ${postalCode || ''}`
               : 'รับหน้าร้าน',
             phone: phone || null,
-            province_id: deliveryMethod === 'delivery' ? 3 : null,
+            province_id: deliveryMethod === 'delivery' ? selectedProvinceId : null,
             district_id: deliveryMethod === 'delivery' ? Number(districtId) : null,
             subdistrict_id: deliveryMethod === 'delivery' ? Number(subdistrictId) : null,
             postal_code: deliveryMethod === 'delivery' ? (postalCode || null) : null,
@@ -435,16 +476,16 @@ function Custom() {
       </div>
 
       {/* เลย์เอาต์ 2 คอลัมน์ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 18, alignItems: 'start' }}>
         {/* ซ้าย: ฟอร์มสินค้า */}
         <div>
-          <h2 style={{ color: '#1976d2', margin: '0 0 16px 0', fontWeight: 800, letterSpacing: 0.5 }}>
+          <h2 style={{ color: BRAND, margin: '0 0 16px 0', fontWeight: 800, letterSpacing: 0.2 }}>
             สั่งทำสินค้า
           </h2>
 
           {/* ประเภทสินค้า */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontWeight: 600 }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>
               ประเภทสินค้า <span style={reqMarkStyle}>*</span>
             </label>
             <select name="category" value={form.category} onChange={handleChange} required style={selectStyle}>
@@ -459,13 +500,13 @@ function Custom() {
               <div style={{ marginTop: 10 }}>
                 <div style={{
                   width: '100%', maxHeight: 380, overflow: 'hidden', borderRadius: 12,
-                  background: '#f0f0f0', border: '1px solid #e5e5e5'
+                  background: '#f0fdf4', border: `1px solid ${BORDER}`
                 }}>
                   {categoryImageUrl ? (
                     <img src={categoryImageUrl} alt={selectedCategory.category_name}
-                         style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} />
+                      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} />
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, color: '#aaa' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, color: MUTED }}>
                       ไม่มีรูปภาพ
                     </div>
                   )}
@@ -475,23 +516,23 @@ function Custom() {
           </div>
 
           {/* ขนาด */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontWeight: 600 }}>ขนาด</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: 8, marginTop: 4 }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>ขนาด</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 140px', gap: 10, marginTop: 6 }}>
               <div>
-                <label style={{ fontSize: 14, color: '#555' }}>
+                <label style={subLabelStyle}>
                   ความกว้าง <span style={reqMarkStyle}>*</span>
                 </label>
                 <input name="width" value={form.width} onChange={handleChange} required inputMode="decimal" style={inputStyle} />
               </div>
               <div>
-                <label style={{ fontSize: 14, color: '#555' }}>
+                <label style={subLabelStyle}>
                   ความสูง <span style={reqMarkStyle}>*</span>
                 </label>
                 <input name="height" value={form.height} onChange={handleChange} required inputMode="decimal" style={inputStyle} />
               </div>
               <div>
-                <label style={{ fontSize: 14, color: '#555' }}>
+                <label style={subLabelStyle}>
                   หน่วย <span style={reqMarkStyle}>*</span>
                 </label>
                 <select name="unit" value={form.unit} onChange={handleChange} style={selectStyle}>
@@ -507,15 +548,15 @@ function Custom() {
           </div>
 
           {/* สี */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontWeight: 600 }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>
               สี <span style={reqMarkStyle}>*</span>
             </label>
             <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
               {['ขาว', 'ชา', 'เงิน', 'ดำ'].map(c => (
-                <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
+                <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: TEXT }}>
                   <input type="radio" name="color" value={c}
-                         checked={form.color === c} onChange={handleChange} required />
+                    checked={form.color === c} onChange={handleChange} required />
                   {c}{c === 'ดำ' && ' (+300)'}
                 </label>
               ))}
@@ -523,35 +564,35 @@ function Custom() {
           </div>
 
           {/* จำนวน */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontWeight: 600 }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>
               จำนวน <span style={reqMarkStyle}>*</span>
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 56px', gap: 8, alignItems: 'center', marginTop: 4 }}>
-              <button type="button" onClick={() => handleQty(-1)} style={iconBtnStyle} aria-label="ลดจำนวน">−</button>
+            <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 56px', gap: 10, alignItems: 'center', marginTop: 6 }}>
+              <button type="button" onClick={() => handleQty(-1)} style={qtyIconBtnStyle} aria-label="ลดจำนวน">−</button>
               <input type="number" name="quantity" value={form.quantity}
-                     onChange={(e) => setForm(prev => ({ ...prev, quantity: clampQty(parseInt(e.target.value, 10)) }))}
-                     min={1} required style={{ ...inputStyle, textAlign: 'center' }} />
-              <button type="button" onClick={() => handleQty(1)} style={iconBtnStyle} aria-label="เพิ่มจำนวน">+</button>
+                onChange={(e) => setForm(prev => ({ ...prev, quantity: clampQty(parseInt(e.target.value, 10)) }))}
+                min={1} required style={{ ...inputStyle, textAlign: 'center' }} />
+              <button type="button" onClick={() => handleQty(1)} style={qtyIconBtnStyle} aria-label="เพิ่มจำนวน">+</button>
             </div>
           </div>
 
-          {/* ออปชันเฉพาะประเภท (มุ้ง/กรอบ/สวิง/รางแขวน) */}
+          {/* ออปชันเฉพาะประเภท */}
           {showHasScreen && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
               <input type="checkbox" name="hasScreen" checked={form.hasScreen} onChange={handleChange} />
-              <label>เพิ่มมุ้งลวด (+500)</label>
+              <label style={{ fontWeight: 600, color: TEXT }}>เพิ่มมุ้งลวด (+500)</label>
             </div>
           )}
           {showRoundFrame && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
               <input type="checkbox" name="roundFrame" checked={form.roundFrame} onChange={handleChange} />
-              <label>กรอบวงกลม (ติ๊ก = 1200/ชุด, ไม่ติ๊ก = 800/ชุด)</label>
+              <label style={{ fontWeight: 600, color: TEXT }}>กรอบวงกลม (ติ๊ก = 1200/ชุด, ไม่ติ๊ก = 800/ชุด)</label>
             </div>
           )}
           {showSwingType && (
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ fontWeight: 600 }}>ประเภทประตูสวิง</label>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>ประเภทประตูสวิง</label>
               <select name="swingType" value={form.swingType} onChange={handleChange} style={selectStyle}>
                 <option value="บานเดี่ยว">บานเดี่ยว (≤1.2×2 = 7000)</option>
                 <option value="บานคู่">บานคู่ (14000)</option>
@@ -559,8 +600,8 @@ function Custom() {
             </div>
           )}
           {showHangingOptions && (
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ fontWeight: 600 }}>โหมดประตูรางแขวน</label>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>โหมดประตูรางแขวน</label>
               <select name="mode" value={form.mode} onChange={handleChange} style={selectStyle}>
                 <option value="มาตรฐาน">มาตรฐาน</option>
                 <option value="แบ่ง4">แบ่ง4</option>
@@ -568,53 +609,51 @@ function Custom() {
             </div>
           )}
           {showFixedAreas && (
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ fontWeight: 600 }}>พื้นที่บานตายซ้าย/ขวา (ตร.ม.)</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>พื้นที่บานตายซ้าย/ขวา (ตร.ม.)</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
                 <input name="fixedLeftM2" value={form.fixedLeftM2} onChange={handleChange}
-                       inputMode="decimal" placeholder="ซ้าย" style={inputStyle} />
+                  inputMode="decimal" placeholder="ซ้าย" style={inputStyle} />
                 <input name="fixedRightM2" value={form.fixedRightM2} onChange={handleChange}
-                       inputMode="decimal" placeholder="ขวา" style={inputStyle} />
+                  inputMode="decimal" placeholder="ขวา" style={inputStyle} />
               </div>
             </div>
           )}
 
           {/* รายละเอียด */}
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ fontWeight: 600 }}>รายละเอียดเพิ่มเติม</label>
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>รายละเอียดเพิ่มเติม</label>
             <textarea name="details" value={form.details} onChange={handleChange}
-                      style={{ ...inputStyle, minHeight: 64 }} placeholder="รายละเอียดอื่น ๆ" />
+              style={{ ...inputStyle, minHeight: 72 }} placeholder="รายละเอียดอื่น ๆ" />
           </div>
 
-          {/* ===== วิธีรับสินค้า / จัดส่ง (ใหม่) ===== */}
-          <div style={{ marginTop: 18, padding: 12, border: '1px solid #e5e7eb', borderRadius: 12 }}>
-            <div style={{ fontWeight: 800, marginBottom: 8 }}>วิธีรับสินค้า</div>
-            <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* ===== วิธีรับสินค้า / จัดส่ง ===== */}
+          <div style={{ marginTop: 18, padding: 14, border: `1px solid ${BORDER}`, borderRadius: 12, background: SURFACE }}>
+            <div style={{ fontWeight: 800, marginBottom: 10, color: BRAND }}>วิธีรับสินค้า</div>
+            <div style={{ display: 'flex', gap: 18, marginBottom: 12, color: TEXT }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
                 <input type="radio" name="deliveryMethod" value="pickup"
-                       checked={deliveryMethod === 'pickup'}
-                       onChange={() => setDeliveryMethod('pickup')} />
+                  checked={deliveryMethod === 'pickup'}
+                  onChange={() => setDeliveryMethod('pickup')} />
                 รับหน้าร้าน (ฟรีค่าส่ง)
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
                 <input type="radio" name="deliveryMethod" value="delivery"
-                       checked={deliveryMethod === 'delivery'}
-                       onChange={() => setDeliveryMethod('delivery')} />
+                  checked={deliveryMethod === 'delivery'}
+                  onChange={() => setDeliveryMethod('delivery')} />
                 จัดส่งตามที่อยู่
               </label>
             </div>
 
             {deliveryMethod === 'delivery' && (
-              <div style={{ display: 'grid', gap: 10 }}>
-                {/* จังหวัด (fix เชียงราย) */}
+              <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={{ fontWeight: 600 }}>จังหวัด</label>
-                  <input value="เชียงราย" disabled style={{ ...inputStyle, background: '#f9fafb' }} />
+                  <label style={labelStyle}>จังหวัด</label>
+                  <input value="เชียงราย" disabled style={{ ...inputStyle, background: '#f0fdf4', color: '#065f46' }} />
                 </div>
 
-                {/* อำเภอ */}
                 <div>
-                  <label style={{ fontWeight: 600 }}>
+                  <label style={labelStyle}>
                     อำเภอ <span style={reqMarkStyle}>*</span>
                   </label>
                   <select
@@ -630,9 +669,8 @@ function Custom() {
                   </select>
                 </div>
 
-                {/* ตำบล */}
                 <div>
-                  <label style={{ fontWeight: 600 }}>
+                  <label style={labelStyle}>
                     ตำบล <span style={reqMarkStyle}>*</span>
                   </label>
                   <select
@@ -649,29 +687,32 @@ function Custom() {
                   </select>
                 </div>
 
-                {/* รหัสไปรษณีย์ (auto) */}
                 <div>
-                  <label style={{ fontWeight: 600 }}>รหัสไปรษณีย์</label>
-                  <input value={postalCode} readOnly style={{ ...inputStyle, background: '#f9fafb' }} />
+                  <label style={labelStyle}>รหัสไปรษณีย์</label>
+                  <input
+                    value={postalCode}
+                    onChange={(e) => { const v = (e.target.value || '').replace(/\\D/g, '').slice(0, 5); setPostalCode(v); setPostalCodeTouched(true); }}
+                    placeholder="10110"
+                    inputMode="numeric"
+                    style={inputStyle}
+                  />
                 </div>
 
-                {/* ที่อยู่/รายละเอียดบ้าน */}
                 <div>
-                  <label style={{ fontWeight: 600 }}>
+                  <label style={labelStyle}>
                     ที่อยู่สำหรับจัดส่ง <span style={reqMarkStyle}>*</span>
                   </label>
                   <textarea
                     value={addressLine}
                     onChange={(e) => setAddressLine(e.target.value)}
                     placeholder="บ้านเลขที่ / หมู่ / ถนน / จุดสังเกต"
-                    style={{ ...inputStyle, minHeight: 60 }}
+                    style={{ ...inputStyle, minHeight: 68 }}
                     required
                   />
                 </div>
 
-                {/* เบอร์โทร */}
                 <div>
-                  <label style={{ fontWeight: 600 }}>
+                  <label style={labelStyle}>
                     เบอร์โทรติดต่อ <span style={reqMarkStyle}>*</span>
                   </label>
                   <input
@@ -683,10 +724,15 @@ function Custom() {
                   />
                 </div>
 
-                {/* ค่าส่ง */}
                 <div style={{
-                  background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: 10,
-                  padding: '10px 12px', fontWeight: 700, display: 'flex', justifyContent: 'space-between'
+                  background: '#f0fdf4',
+                  border: `1px dashed ${BRAND}`,
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  color: BRAND_DARK
                 }}>
                   <span>{quoteLoading ? 'กำลังคำนวณค่าส่ง…' : 'ค่าส่งตามพื้นที่'}</span>
                   <span>฿{Number(shippingFee || 0).toLocaleString('th-TH')}</span>
@@ -696,9 +742,9 @@ function Custom() {
           </div>
 
           {/* ราคาประเมิน + ปุ่มเพิ่มลงตะกร้า */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 14 }}>
             {estimatedPrice > 0 && (
-              <span style={{ color: '#388e3c', fontWeight: 800, fontSize: 18 }}>
+              <span style={{ color: BRAND_DARK, fontWeight: 800, fontSize: 18 }}>
                 {`ราคาประเมิน (รายการนี้): ${Number(estimatedPrice).toLocaleString('th-TH')} บาท`}
               </span>
             )}
@@ -706,7 +752,7 @@ function Custom() {
               type="button"
               disabled={estimatedPrice <= 0}
               onClick={handleAddToCart}
-              style={{ ...buttonStyle, background: '#16a34a' }}
+              style={{ ...buttonStyle, background: BRAND }}
               title="เพิ่มรายการนี้ลงตะกร้าสั่งทำ"
             >
               เพิ่มลงตะกร้าสั่งทำ
@@ -717,7 +763,7 @@ function Custom() {
         {/* ขวา: ตะกร้าสั่งทำ */}
         <aside style={cartAsideStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <h3 style={{ margin: 0, color: '#111827' }}>ตะกร้าสั่งทำ</h3>
+            <h3 style={{ margin: 0, color: TEXT }}>ตะกร้าสั่งทำ</h3>
             {!!cart.length && (<button onClick={clearCart} style={linkBtnStyle}>ล้างตะกร้า</button>)}
           </div>
 
@@ -728,14 +774,14 @@ function Custom() {
               {cart.map(item => (
                 <div key={item.id} style={cartItemStyle}>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <div style={{ width: 72, height: 72, borderRadius: 8, overflow: 'hidden', background: '#f3f4f6', border: '1px solid #e5e7eb' }}>
+                    <div style={{ width: 78, height: 78, borderRadius: 10, overflow: 'hidden', background: '#f3f4f6', border: `1px solid ${BORDER}` }}>
                       {item.categoryImageUrl ? (
                         <img src={item.categoryImageUrl} alt={item.productType} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : null}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, color: '#111827' }}>{item.productType}</div>
-                      <div style={{ fontSize: 13, color: '#6b7280' }}>{item.size} • สี{item.color}</div>
+                      <div style={{ fontWeight: 800, color: TEXT }}>{item.productType}</div>
+                      <div style={{ fontSize: 13, color: MUTED }}>{item.size} • สี{item.color}</div>
                       {item.hasScreen && <div style={tagStyle}>มุ้งลวด</div>}
                       {item.roundFrame && <div style={tagStyle}>กรอบวงกลม</div>}
                       {item.swingType && <div style={tagStyle}>{item.swingType}</div>}
@@ -744,26 +790,26 @@ function Custom() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button onClick={() => changeQtyInCart(item.id, -1)} style={qtyBtnStyle} aria-label="ลดจำนวน">−</button>
-                      <div style={{ minWidth: 28, textAlign: 'center' }}>{item.quantity}</div>
-                      <button onClick={() => changeQtyInCart(item.id, +1)} style={qtyBtnStyle} aria-label="เพิ่มจำนวน">+</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button onClick={() => changeQtyInCart(item.id, -1)} style={qtyIconBtnStyle} aria-label="ลดจำนวน">−</button>
+                      <div style={{ minWidth: 30, textAlign: 'center', fontWeight: 700 }}>{item.quantity}</div>
+                      <button onClick={() => changeQtyInCart(item.id, +1)} style={qtyIconBtnStyle} aria-label="เพิ่มจำนวน">+</button>
                     </div>
-                    <div style={{ fontWeight: 800, color: '#111827' }}>
+                    <div style={{ fontWeight: 900, color: TEXT }}>
                       ฿{Number(item.estimatedPrice).toLocaleString('th-TH')}
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
                     <button onClick={() => removeCartItem(item.id)} style={dangerBtnStyle}>ลบ</button>
-                    {item.details ? <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'right', marginLeft: 8, flex: 1 }}>หมายเหตุ: {item.details}</div> : null}
+                    {item.details ? <div style={{ fontSize: 12, color: MUTED, textAlign: 'right', marginLeft: 8, flex: 1 }}>หมายเหตุ: {item.details}</div> : null}
                   </div>
                 </div>
               ))}
 
               {/* รวมเงิน */}
               <div style={cartTotalBoxStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800 }}>
                   <span>ค่าสินค้า</span>
                   <span>฿{cartSubtotal.toLocaleString('th-TH')}</span>
                 </div>
@@ -773,15 +819,15 @@ function Custom() {
                     ? `฿${Number(shippingFee || 0).toLocaleString('th-TH')}`
                     : '฿0'}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, marginTop: 8, borderTop: '1px solid #e5e7eb', paddingTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, marginTop: 10, borderTop: `1px solid ${BORDER}`, paddingTop: 10 }}>
                   <span>ยอดรวมทั้งสิ้น</span>
-                  <span>฿{grandTotal.toLocaleString('th-TH')}</span>
+                  <span style={{ color: BRAND_DARK }}>฿{grandTotal.toLocaleString('th-TH')}</span>
                 </div>
 
                 <button
                   onClick={handleSubmitCart}
                   disabled={loading || !cart.length || (deliveryMethod === 'delivery' && quoteLoading)}
-                  style={{ ...buttonStyle, width: '100%', marginTop: 10 }}
+                  style={{ ...buttonStyle, width: '100%', marginTop: 12, background: BRAND }}
                 >
                   {loading ? 'กำลังส่ง...' : `ส่งคำสั่งทำ (ทั้งหมด ${cart.length} รายการ)`}
                 </button>
@@ -794,124 +840,130 @@ function Custom() {
   );
 }
 
-/* ============ Styles ============ */
-const inputStyle = {
+/* ============ Styles (ปรับสมดุลขนาด + เขียว) ============ */
+const baseField = {
   width: '100%',
-  padding: '10px 12px',
-  borderRadius: 8,
+  padding: '12px 14px',
+  borderRadius: 10,
   border: '1px solid #d1d5db',
   fontSize: 16,
-  marginTop: 4,
+  marginTop: 6,
   boxSizing: 'border-box',
   outline: 'none'
 };
-const selectStyle = { ...inputStyle, background: '#fafafa' };
+const inputStyle = { ...baseField, background: '#fff' };
+const selectStyle = { ...baseField, background: '#f9fafb' };
+
+const labelStyle = { fontWeight: 800, color: BRAND, letterSpacing: 0.2 };
+const subLabelStyle = { fontSize: 14, color: '#374151', fontWeight: 700 };
+
 const buttonStyle = {
   padding: '12px 16px',
-  borderRadius: 10,
+  height: 44,
+  borderRadius: 12,
   border: 'none',
-  background: '#1976d2',
+  background: BRAND,
   color: '#fff',
-  fontWeight: 800,
+  fontWeight: 900,
   fontSize: 16,
   cursor: 'pointer',
-  transition: 'transform .05s ease',
+  transform: 'translateZ(0)',
+  transition: 'transform .05s ease, filter .15s ease',
 };
-const iconBtnStyle = {
-  ...buttonStyle,
-  padding: 0,
+
+const qtyIconBtnStyle = {
+  padding: '0 12px',
   height: 44,
-  background: '#f5f5f5',
-  color: '#333',
-  border: '1px solid #ddd',
+  borderRadius: 10,
+  border: `1px solid ${BRAND}`,
+  background: '#f0fdf4',
+  color: BRAND_DARK,
+  cursor: 'pointer',
+  fontWeight: 900,
+  fontSize: 18,
 };
+
 const backBtnStyle = {
-  display: 'flex', alignItems: 'center', gap: 8,
-  background: 'linear-gradient(90deg,#43e97b 0%,#38f9d7 100%)',
-  color: '#fff', fontWeight: 800, fontSize: 16,
+  display: 'flex', alignItems: 'center', gap: 10,
+  background: `linear-gradient(90deg, ${BRAND_GRAD_1} 0%, ${BRAND_GRAD_2} 100%)`,
+  color: '#fff', fontWeight: 900, fontSize: 16,
   border: 'none', borderRadius: 24, padding: '10px 24px',
-  boxShadow: '0 2px 8px rgba(67,233,123,0.15)',
+  boxShadow: '0 2px 8px rgba(22,163,74,0.18)',
   cursor: 'pointer'
 };
+
 const cartAsideStyle = {
   position: 'sticky',
   top: 16,
   background: '#ffffff',
-  border: '1px solid #e5e7eb',
+  border: `1px solid ${BORDER}`,
   borderRadius: 14,
-  padding: 12,
+  padding: 14,
   boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
   maxHeight: 'calc(100vh - 32px)',
   overflow: 'auto'
 };
 const cartItemStyle = {
-  border: '1px solid #e5e7eb',
+  border: `1px solid ${BORDER}`,
   borderRadius: 12,
   padding: 10,
   background: '#fff'
 };
 const emptyCartStyle = {
-  border: '1px dashed #d1d5db',
+  border: `1px dashed ${BORDER}`,
   borderRadius: 12,
   padding: 16,
-  color: '#6b7280',
+  color: MUTED,
   textAlign: 'center',
   background: '#fafafa'
-};
-const qtyBtnStyle = {
-  padding: '6px 10px',
-  borderRadius: 8,
-  border: '1px solid #d1d5db',
-  background: '#f9fafb',
-  cursor: 'pointer',
-  fontWeight: 800
 };
 const dangerBtnStyle = {
   border: '1px solid #ef4444',
   background: '#fee2e2',
   color: '#991b1b',
-  padding: '6px 10px',
-  borderRadius: 8,
+  padding: '8px 12px',
+  borderRadius: 10,
   cursor: 'pointer',
-  fontWeight: 700
+  fontWeight: 800
 };
 const linkBtnStyle = {
   background: 'transparent',
-  color: '#2563eb',
+  color: BRAND,
   border: 'none',
   cursor: 'pointer',
-  fontWeight: 700
+  fontWeight: 800
 };
 const cartTotalBoxStyle = {
-  borderTop: '1px solid #e5e7eb',
+  borderTop: `1px solid ${BORDER}`,
   paddingTop: 10,
   marginTop: 2
 };
 const tagStyle = {
   display: 'inline-block',
   fontSize: 11,
-  color: '#374151',
-  background: '#f3f4f6',
-  border: '1px solid #e5e7eb',
-  padding: '2px 6px',
+  color: '#065f46',
+  background: '#ecfdf5',
+  border: `1px solid ${BORDER}`,
+  padding: '2px 8px',
   borderRadius: 999,
   marginTop: 4,
-  marginRight: 6
+  marginRight: 6,
+  fontWeight: 700
 };
 const warnBoxStyle = {
   marginTop: 8,
-  padding: '8px 10px',
-  borderRadius: 8,
-  background: '#FEF2F2',
-  border: '1px solid #FCA5A5',
+  padding: '10px 12px',
+  borderRadius: 10,
+  background: '#fef2f2',
+  border: '1px solid #fecaca',
   color: '#991B1B',
-  fontWeight: 700,
+  fontWeight: 800,
   fontSize: 14,
 };
 const reqMarkStyle = {
   color: '#dc2626',
   marginLeft: 6,
-  fontWeight: 800,
+  fontWeight: 900,
 };
 
 export default Custom;

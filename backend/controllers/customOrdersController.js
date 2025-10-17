@@ -107,6 +107,15 @@ exports.createOrder = async (req, res) => {
       fixed_left_m2: Number(fixedLeftM2) || 0,
       fixed_right_m2: Number(fixedRightM2) || 0,
       price: Math.max(0, Math.round(Number(priceClient) || 0)),
+      // Pre-generate a unique custom_code to avoid trigger duplicate issues
+      // (trigger will skip assignment if this is non-empty)
+      custom_code: (() => {
+        const now = new Date();
+        const ymd = now.toISOString().slice(0, 10).replace(/-/g, '');
+        const ms = String(now.getTime()).slice(-5);
+        const rnd = Math.floor(Math.random() * 90 + 10); // 2 digits
+        return `OC#${ymd}-${ms}-${rnd}`;
+      })(),
 
       // ==== ฟิลด์ใหม่: บันทึกลง custom_orders (ต้องมีคอลัมน์ตามที่เพิ่มใน DB) ====
       shipping_method: method,               // ENUM('pickup','delivery')

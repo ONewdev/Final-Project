@@ -1,10 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import DataTable from 'react-data-table-component';
 import Swal from 'sweetalert2';
 import { FaEdit, FaPlus, FaTimes, FaImage, FaSearch, FaEye } from 'react-icons/fa';
-import { useMemo } from 'react';
 
-// Wrap your Modal component with React.memo
+// ---------------- Modal ----------------
 const Modal = React.memo(({ show, onHide, children, title }) => {
   if (!show) return null;
 
@@ -29,20 +28,29 @@ const Modal = React.memo(({ show, onHide, children, title }) => {
   );
 });
 
+// ---------------- Page ----------------
 function Products() {
-  const [products, setProducts] = useState([]);
+  const host = import.meta.env.VITE_HOST || 'http://localhost:3000';
 
-  const [searchTerm, setSearchTerm] = useState('');
+  // data states
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [colorOptions, setColorOptions] = useState([]);
+
+  // ui states
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(''); // dropdown filter
+
+  // modals
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // item states
   const [editProduct, setEditProduct] = useState(null);
   const [detailProduct, setDetailProduct] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [colorOptions, setColorOptions] = useState([]);
   const [newProduct, setNewProduct] = useState({
-    product_code: '',
     name: '',
     description: '',
     category_id: '',
@@ -54,58 +62,24 @@ function Products() {
     status: 'active',
   });
 
-  const host = import.meta.env.VITE_HOST || 'http://localhost:3000';
+  // next-code states (สำหรับโชว์รหัสล่วงหน้าใน Add Modal)
+  const [nextCode, setNextCode] = useState('');
+  const [codeLoading, setCodeLoading] = useState(false);
 
-  // Fetch products data
-  useEffect(() => {
-    fetchProducts();
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch(`${host}/api/categories`);
-        if (!res.ok) throw new Error('Failed to fetch categories');
-        const data = await res.json();
-        setCategories(data);
-      } catch (error) {
-        console.error('Fetch categories error:', error);
-      }
-    };
+  // preview states
+  const [addPreview, setAddPreview] = useState(null);
+  const [editPreview, setEditPreview] = useState(null);
 
-    fetchCategories();
-
-    // Fetch color options from backend
-    const fetchColors = async () => {
-      try {
-        const res = await fetch(`${host}/api/colors`);
-        if (!res.ok) throw new Error('Failed to fetch colors');
-        const data = await res.json();
-        setColorOptions(data);
-      } catch (error) {
-        console.error('Fetch colors error:', error);
-      }
-    };
-    fetchColors();
-  }, [host]);
-
-  const filteredProducts = useMemo(() => {
-    if (searchTerm.trim() === '') return products;
-    return products.filter(product =>
-      product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category_name?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [products, searchTerm]);
-
+  // -------- Fetchers --------
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${host}/api/products`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Fetch error:', error);
+      const res = await fetch(`${host}/api/products`);
+      if (!res.ok) throw new Error('Failed to fetch products');
+      const data = await res.json();
+      setProducts(Array.isArray(data) ? data : (data?.data ?? []));
+    } catch (e) {
+      console.error(e);
       Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลสินค้าได้', 'error');
       setProducts([]);
     } finally {
@@ -113,28 +87,111 @@ function Products() {
     }
   };
 
-  const handleEdit = (id) => {
-    const product = products.find((p) => p.id === id);
-    if (product) {
-      setEditProduct({ ...product });
-      setShowEditModal(true);
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch(`${host}/api/categories`);
+      if (!res.ok) throw new Error('Failed to fetch categories');
+      const data = await res.json();
+      setCategories(Array.isArray(data) ? data : (data?.data ?? []));
+    } catch (e) {
+      console.error(e);
+      setCategories([]);
     }
   };
 
+  const fetchColors = async () => {
+    try {
+      const res = await fetch(`${host}/api/colors`);
+      if (!res.ok) throw new Error('Failed to fetch colors');
+      const data = await res.json();
+      setColorOptions(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      setColorOptions([]);
+    }
+  };
+
+  // โหลด "รหัสถัดไป" สำหรับโชว์ใน Add Modal เท่านั้น
+  const loadNextCode = useCallback(async () => {
+    try {
+      setCodeLoading(true);
+      const res = await fetch(`${host}/api/products/next-code`);
+      if (!res.ok) throw new Error('fail');
+      const data = await res.json();
+      setNextCode(data?.next_code || '');
+    } catch (err) {
+      console.error('loadNextCode error:', err);
+      setNextCode('—');
+    } finally {
+      setCodeLoading(false);
+    }
+  }, [host]);
+
+  useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+    fetchColors();
+  }, [host]);
+
+  // -------- Filters --------
+  const filteredProducts = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return products.filter((p) => {
+      const matchText =
+        !q ||
+        p.name?.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q) ||
+        p.category_name?.toString().toLowerCase().includes(q);
+      const matchCat =
+        !selectedCategory || String(p.category_id) === String(selectedCategory);
+      return matchText && matchCat;
+    });
+  }, [products, searchTerm, selectedCategory]);
+
+  // เติมลำดับตามที่ "กรองแล้ว"
+  const displayedProducts = useMemo(
+    () => filteredProducts.map((p, idx) => ({ ...p, _no: idx + 1 })),
+    [filteredProducts]
+  );
+
+  // -------- Utils --------
+  const removeCommas = (v = '') => v.toString().replace(/,/g, '');
+  const formatNumberWithCommas = (value) => {
+    if (!value) return '';
+    const cleaned = value.toString().replace(/[^\d.]/g, '');
+    const parts = cleaned.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  };
+  const formatPrice = (price) => {
+    const n = parseFloat(price);
+    return Number.isNaN(n) ? '-' : `฿${n.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+  };
+
+  // -------- Handlers: table actions --------
   const handleViewDetails = (id) => {
-    const product = products.find((p) => p.id === id);
-    if (product) {
-      setDetailProduct(product);
+    const p = products.find((x) => x.id === id);
+    if (p) {
+      setDetailProduct(p);
       setShowDetailModal(true);
     }
   };
 
-  const removeCommas = (value) => value.replace(/,/g, '');
+  const handleEdit = (id) => {
+    const p = products.find((x) => x.id === id);
+    if (p) {
+      // เคลียร์พรีวิวเดิมก่อน
+      if (editPreview) URL.revokeObjectURL(editPreview);
+      setEditPreview(null);
+      setEditProduct({ ...p });
+      setShowEditModal(true);
+    }
+  };
 
+  // -------- Handlers: edit form --------
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    const updatedValue = name === 'price' ? removeCommas(value) : value;
-    setEditProduct((prev) => ({ ...prev, [name]: updatedValue }));
+    setEditProduct((prev) => ({ ...prev, [name]: name === 'price' ? removeCommas(value) : value }));
   };
 
   const handleEditSubmit = async (e) => {
@@ -143,59 +200,99 @@ function Products() {
 
     try {
       const formData = new FormData();
-      Object.keys(editProduct).forEach(key => {
+      Object.keys(editProduct).forEach((key) => {
         if (key !== 'image' && editProduct[key] !== null && editProduct[key] !== undefined) {
           formData.append(key, editProduct[key]);
         }
       });
-
       if (editProduct.image && editProduct.image instanceof File) {
         formData.append('image', editProduct.image);
       }
 
-      const response = await fetch(`${host}/api/products/${editProduct.id}`, {
+      const res = await fetch(`${host}/api/products/${editProduct.id}`, {
         method: 'PATCH',
         body: formData,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Server validation error:', errorData);
+      if (!res.ok) {
+        const err = await res.json();
+        console.error('Server validation error:', err);
         throw new Error('Failed to update product');
       }
-
-      const updatedProduct = await response.json();
-
+      const updated = await res.json();
       Swal.fire('สำเร็จ', 'อัปเดตข้อมูลสินค้าสำเร็จแล้ว', 'success');
-      setProducts((prev) =>
-        prev.map((p) => (p.id === editProduct.id ? updatedProduct : p))
-      );
+      setProducts((prev) => prev.map((p) => (p.id === editProduct.id ? updated : p)));
+      // ปิดโมดัล + ล้างพรีวิว
+      if (editPreview) URL.revokeObjectURL(editPreview);
+      setEditPreview(null);
       setShowEditModal(false);
       setEditProduct(null);
     } catch (error) {
-      console.error('Update error:', error);
+      console.error(error);
       Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอัปเดตสินค้าได้', 'error');
     }
   };
 
+  const handleDeleteProduct = async () => {
+    if (!editProduct) return;
+    const result = await Swal.fire({
+      title: 'ยืนยันการลบสินค้า?',
+      text: 'คุณต้องการลบสินค้านี้หรือไม่',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'ลบ',
+      cancelButtonText: 'ยกเลิก',
+    });
+    if (!result.isConfirmed) return;
+    try {
+      const res = await fetch(`${host}/api/products/${editProduct.id}`, { method: 'DELETE' });
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        Swal.fire('ลบไม่สำเร็จ', data?.error || data?.message || 'ไม่สามารถลบสินค้าได้', 'error');
+        return;
+      }
+      setProducts((prev) => prev.filter((p) => p.id !== editProduct.id));
+      Swal.fire('สำเร็จ', 'ลบสินค้าสำเร็จ', 'success');
+      if (editPreview) URL.revokeObjectURL(editPreview);
+      setEditPreview(null);
+      setShowEditModal(false);
+      setEditProduct(null);
+    } catch (e) {
+      Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถลบสินค้าได้', 'error');
+    }
+  };
+
+  // -------- Handlers: add form --------
   const handleAddChange = (e) => {
     const { name, value } = e.target;
-    const updatedValue = name === 'price' ? removeCommas(value) : value;
-    setNewProduct((prev) => ({ ...prev, [name]: updatedValue }));
+    setNewProduct((prev) => ({ ...prev, [name]: name === 'price' ? removeCommas(value) : value }));
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+
     if (showEditModal) {
       setEditProduct((prev) => ({ ...prev, image: file }));
+      setEditPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
     } else {
       setNewProduct((prev) => ({ ...prev, image: file }));
+      setAddPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
     }
   };
 
   const resetNewProduct = useCallback(() => {
     setNewProduct({
-      product_code: '',
       name: '',
       description: '',
       category_id: '',
@@ -206,7 +303,11 @@ function Products() {
       image: null,
       status: 'active',
     });
-  }, []);
+    if (addPreview) URL.revokeObjectURL(addPreview);
+    setAddPreview(null);
+    setNextCode('');
+    setCodeLoading(false);
+  }, [addPreview]);
 
   const closeAddModal = useCallback(() => {
     setShowAddModal(false);
@@ -218,71 +319,56 @@ function Products() {
 
     try {
       const formData = new FormData();
-      formData.append('product_code', newProduct.product_code);
       formData.append('name', newProduct.name);
       formData.append('description', newProduct.description);
       formData.append('category_id', newProduct.category_id);
       formData.append('price', newProduct.price);
       formData.append('quantity', newProduct.quantity);
-      formData.append('status', newProduct.status);
-      // หมายเหตุ: ถ้าต้องการส่ง size/color ไป backend ด้วย ให้ uncomment บรรทัดล่าง
-      // formData.append('size', newProduct.size);
-      // formData.append('color', newProduct.color);
+      formData.append('size', newProduct.size || '');
+      formData.append('color', newProduct.color || '');
+      formData.append('status', newProduct.status || 'active');
+      if (newProduct.image) formData.append('image', newProduct.image);
 
-      if (newProduct.image) {
-        formData.append('image', newProduct.image);
-      }
-
-      const response = await fetch(`${host}/api/products`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Server validation error:', errorData);
+      const res = await fetch(`${host}/api/products`, { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json();
+        console.error('Server validation error:', err);
         throw new Error('Failed to add product');
       }
-
-      const data = await response.json();
-
+      const added = await res.json();
       Swal.fire('สำเร็จ', 'เพิ่มสินค้าสำเร็จแล้ว', 'success');
-      setProducts((prev) => [data, ...prev]);
+      setProducts((prev) => [added, ...prev]);
       setShowAddModal(false);
       resetNewProduct();
     } catch (error) {
-      console.error('Add error:', error);
+      console.error(error);
       Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเพิ่มสินค้าได้', 'error');
     }
   };
 
-  const formatNumberWithCommas = (value) => {
-    if (!value) return '';
-    const str = value.toString();
-    const cleaned = str.replace(/[^\d.]/g, '');
-    const parts = cleaned.split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return parts.join('.');
-  };
+  
 
-  const formatPrice = (price) => {
-    const numPrice = parseFloat(price);
-    return isNaN(numPrice) ? '-' : `฿${numPrice.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
-  };
-
+  // -------- DataTable columns --------
   const columns = [
+    {
+      name: <span className="whitespace-nowrap">ลำดับ</span>,
+      selector: (row) => row._no,
+      width: '96px',
+
+      sortable: true,
+    },
     {
       name: 'รหัสสินค้า',
       selector: (row) => row.product_code,
       sortable: true,
-      width: '120px'
+      width: '140px',
     },
     {
       name: 'รูปภาพ',
       cell: (row) =>
         row.image_url ? (
           <img
-            src={`${host}${row.image_url}`}
+            src={`${host}${String(row.image_url).startsWith('/') ? '' : '/'}${row.image_url}`}
             alt={row.name}
             className="w-12 h-12 rounded-lg object-cover border-2 border-gray-200 shadow-sm"
           />
@@ -291,42 +377,26 @@ function Products() {
             <FaImage size={20} />
           </div>
         ),
-      width: '100px'
+      width: '100px',
     },
     {
       name: 'ชื่อสินค้า',
       selector: (row) => row.name,
       wrap: true,
-      sortable: true
-    },
-    {
-      name: 'รายละเอียดสินค้า',
-      selector: (row) => row.description,
-      wrap: true,
-      cell: (row) => (
-        <div className="max-w-xs">
-          <p className="text-sm text-gray-600 truncate" title={row.description}>
-            {row.description || '-'}
-          </p>
-        </div>
-      )
+      sortable: true,
     },
     {
       name: 'หมวดหมู่',
       selector: (row) => row.category_name,
-      width: '120px',
-      sortable: true
+      width: '170px',
+      sortable: true,
     },
     {
       name: 'ราคา',
       selector: (row) => row.price,
-      cell: (row) => (
-        <span className="font-medium text-green-600">
-          {formatPrice(row.price)}
-        </span>
-      ),
+      cell: (row) => <span className="font-medium text-green-600">{formatPrice(row.price)}</span>,
       width: '120px',
-      sortable: true
+      sortable: true,
     },
     {
       name: 'จำนวน',
@@ -334,23 +404,23 @@ function Products() {
       width: '100px',
       sortable: true,
       cell: (row) => (
-        <span className={`${row.quantity <= 5 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>
+        <span className={row.quantity <= 5 ? 'text-red-600 font-medium' : 'text-gray-900'}>
           {row.quantity}
         </span>
-      )
+      ),
     },
     {
       name: 'สถานะ',
       cell: (row) => (
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${row.status === 'active'
-          ? 'bg-green-100 text-green-800'
-          : 'bg-red-100 text-red-800'
-          }`}>
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-medium ${row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}
+        >
           {row.status === 'active' ? 'แสดง' : 'ไม่แสดง'}
         </span>
       ),
       width: '100px',
-      sortable: true
+      sortable: true,
     },
     {
       name: 'จัดการ',
@@ -372,16 +442,13 @@ function Products() {
           </button>
         </div>
       ),
-      width: '140px'
+      width: '140px',
     },
   ];
 
+  // -------- DataTable styles --------
   const customStyles = {
-    table: {
-      style: {
-        backgroundColor: '#ffffff',
-      },
-    },
+    table: { style: { backgroundColor: '#ffffff' } },
     headRow: {
       style: {
         backgroundColor: '#f8fafc',
@@ -396,6 +463,7 @@ function Products() {
         color: '#374151',
         paddingLeft: '16px',
         paddingRight: '16px',
+        whiteSpace: 'nowrap',
       },
     },
     cells: {
@@ -411,13 +479,20 @@ function Products() {
     rows: {
       style: {
         minHeight: '60px',
-        '&:hover': {
-          backgroundColor: '#f9fafb',
-        },
+        '&:hover': { backgroundColor: '#f9fafb' },
       },
     },
   };
 
+  // --- cleanup previews on unmount
+  useEffect(() => {
+    return () => {
+      if (addPreview) URL.revokeObjectURL(addPreview);
+      if (editPreview) URL.revokeObjectURL(editPreview);
+    };
+  }, [addPreview, editPreview]);
+
+  // ---------------- Render ----------------
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -425,10 +500,15 @@ function Products() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">จัดการสินค้า</h1>
           <p className="text-gray-600">จัดการข้อมูลสินค้าทั้งหมดในระบบ</p>
         </div>
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+
+        {/* Toolbar: add + search + category filter */}
+        <div className="mb-6 flex flex-col lg:flex-row gap-4 justify-between items-stretch">
           <div className="flex gap-2">
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={async () => {
+                await loadNextCode();
+                setShowAddModal(true);
+              }}
               className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-sm"
             >
               <FaPlus className="mr-2" size={14} />
@@ -436,18 +516,37 @@ function Products() {
             </button>
           </div>
 
-          <div className="relative w-full sm:w-80">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="ค้นหาสินค้า..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center w-full lg:w-auto">
+            {/* search */}
+            <div className="relative w-full sm:w-80">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="ค้นหาสินค้า..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* category filter */}
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              aria-label="กรองตามหมวดหมู่"
+            >
+              <option value="">หมวดหมู่: ทั้งหมด</option>
+              {categories.map((cat) => (
+                <option key={cat.category_id} value={cat.category_id}>
+                  {cat.category_name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
+        {/* cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow-sm">
             <h3 className="text-sm font-medium text-gray-500">สินค้าทั้งหมด</h3>
@@ -456,26 +555,28 @@ function Products() {
           <div className="bg-white p-4 rounded-lg shadow-sm">
             <h3 className="text-sm font-medium text-gray-500">สินค้าที่แสดง</h3>
             <p className="text-2xl font-bold text-green-600">
-              {products.filter(p => p.status === 'active').length}
+              {products.filter((p) => p.status === 'active').length}
             </p>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-sm">
             <h3 className="text-sm font-medium text-gray-500">สินค้าใกล้หมด</h3>
             <p className="text-2xl font-bold text-red-600">
-              {products.filter(p => p.quantity <= 5).length}
+              {products.filter((p) => Number(p.quantity) <= 5).length}
             </p>
           </div>
         </div>
 
+        {/* table */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           {loading ? (
             <div className="text-center py-12">
               <p className="text-gray-500 text-lg">กำลังโหลดข้อมูล...</p>
             </div>
-          ) : filteredProducts.length > 0 ? (
+          ) : displayedProducts.length > 0 ? (
             <DataTable
+              keyField="id"
               columns={columns}
-              data={filteredProducts}
+              data={displayedProducts}
               pagination
               paginationPerPage={10}
               paginationRowsPerPageOptions={[10, 20, 50]}
@@ -491,10 +592,12 @@ function Products() {
           )}
         </div>
 
-        {/* ===== Modal: Edit product (re-ordered fields) ===== */}
+        {/* ===== Modal: Edit product ===== */}
         <Modal
           show={showEditModal}
           onHide={() => {
+            if (editPreview) URL.revokeObjectURL(editPreview);
+            setEditPreview(null);
             setShowEditModal(false);
             setEditProduct(null);
           }}
@@ -514,7 +617,7 @@ function Products() {
                 required
               >
                 <option value="">-- เลือกหมวดหมู่ --</option>
-                {categories.map(cat => (
+                {categories.map((cat) => (
                   <option key={cat.category_id} value={cat.category_id}>
                     {cat.category_name}
                   </option>
@@ -522,18 +625,16 @@ function Products() {
               </select>
             </div>
 
-            {/* 2) รหัสสินค้า */}
+            {/* 2) รหัสสินค้า (แก้ไขไม่ได้) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                รหัสสินค้า <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">รหัสสินค้า</label>
               <input
                 type="text"
                 name="product_code"
                 value={editProduct?.product_code || ''}
-                onChange={handleEditChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
+                readOnly
+                className="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-500 rounded-lg"
+                tabIndex={-1}
               />
             </div>
 
@@ -563,7 +664,7 @@ function Products() {
                   name="price"
                   value={formatNumberWithCommas(editProduct?.price) || ''}
                   onChange={handleEditChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="0.00"
                   required
                 />
@@ -630,7 +731,7 @@ function Products() {
               />
             </div>
 
-            {/* 9) รูปภาพ */}
+            {/* 9) รูปภาพ + พรีวิว */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">รูปภาพ</label>
               <input
@@ -640,14 +741,37 @@ function Products() {
                 accept="image/*"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              {editProduct?.image_url && (
-                <div className="mt-3">
+
+              {/* ถ้าเลือกไฟล์ใหม่ ให้พรีวิวไฟล์ใหม่ก่อน */}
+              {editPreview ? (
+                <div className="mt-3 flex items-center gap-3">
                   <img
-                    src={`${host}${editProduct.image_url}`}
-                    alt="Product"
+                    src={editPreview}
+                    alt="พรีวิวรูปใหม่"
                     className="w-24 h-24 object-cover rounded-lg border border-gray-200"
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      URL.revokeObjectURL(editPreview);
+                      setEditPreview(null);
+                      setEditProduct((prev) => ({ ...prev, image: null }));
+                    }}
+                    className="px-3 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
+                  >
+                    ลบรูปใหม่
+                  </button>
                 </div>
+              ) : (
+                editProduct?.image_url && (
+                  <div className="mt-3">
+                    <img
+                      src={`${host}${String(editProduct.image_url).startsWith('/') ? '' : '/'}${editProduct.image_url}`}
+                      alt="Product"
+                      className="w-24 h-24 object-cover rounded-lg border border-gray-200"
+                    />
+                  </div>
+                )
               )}
             </div>
 
@@ -656,37 +780,51 @@ function Products() {
               <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
               <select
                 name="status"
-                value={editProduct?.status || 'active'}
-                onChange={handleEditChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={editProduct?.status ?? 'active'}
+                onChange={(e) =>
+                  setEditProduct((prev) => ({ ...prev, status: e.target.value }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
               >
                 <option value="active">แสดง</option>
                 <option value="inactive">ไม่แสดง</option>
               </select>
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4 border-t">
+
+            <div className="flex justify-between items-center pt-4 border-t">
               <button
                 type="button"
-                onClick={() => {
-                  setShowEditModal(false);
-                  setEditProduct(null);
-                }}
-                className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors duration-200"
+                onClick={handleDeleteProduct}
+                className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors duration-200"
               >
-                ยกเลิก
+                ลบสินค้า
               </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200"
-              >
-                บันทึกการเปลี่ยนแปลง
-              </button>
+              <div className="space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editPreview) URL.revokeObjectURL(editPreview);
+                    setEditPreview(null);
+                    setShowEditModal(false);
+                    setEditProduct(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors duration-200"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200"
+                >
+                  บันทึกการเปลี่ยนแปลง
+                </button>
+              </div>
             </div>
           </form>
         </Modal>
 
-        {/* ===== Modal: View details (unchanged) ===== */}
+        {/* ===== Modal: View details ===== */}
         <Modal
           show={showDetailModal}
           onHide={() => {
@@ -700,7 +838,7 @@ function Products() {
               <div className="flex items-start gap-4">
                 {detailProduct.image_url ? (
                   <img
-                    src={`${host}${detailProduct.image_url}`}
+                    src={`${host}${String(detailProduct.image_url).startsWith('/') ? '' : '/'}${detailProduct.image_url}`}
                     alt={detailProduct.name}
                     className="w-28 h-28 rounded-lg object-cover border border-gray-200"
                   />
@@ -729,11 +867,19 @@ function Products() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">จำนวน</p>
-                      <p className={`font-medium ${detailProduct.quantity <= 5 ? 'text-red-600' : 'text-gray-900'}`}>{detailProduct.quantity}</p>
+                      <p
+                        className={`font-medium ${Number(detailProduct.quantity) <= 5 ? 'text-red-600' : 'text-gray-900'
+                          }`}
+                      >
+                        {detailProduct.quantity}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">สถานะ</p>
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${detailProduct.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      <span
+                        className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${detailProduct.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}
+                      >
                         {detailProduct.status === 'active' ? 'แสดง' : 'ไม่แสดง'}
                       </span>
                     </div>
@@ -751,7 +897,9 @@ function Products() {
 
               <div>
                 <p className="text-xs text-gray-500 mb-1">รายละเอียดสินค้า</p>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{detailProduct.description || '-'}</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {detailProduct.description || '-'}
+                </p>
               </div>
 
               <div className="flex justify-end border-t pt-4">
@@ -770,12 +918,8 @@ function Products() {
           )}
         </Modal>
 
-        {/* ===== Modal: Add product (re-ordered fields) ===== */}
-        <Modal
-          show={showAddModal}
-          onHide={closeAddModal}
-          title="เพิ่มสินค้าใหม่"
-        >
+        {/* ===== Modal: Add product ===== */}
+        <Modal show={showAddModal} onHide={closeAddModal} title="เพิ่มสินค้าใหม่">
           <form onSubmit={handleAddSubmit} className="space-y-4">
             {/* 1) หมวดหมู่ */}
             <div>
@@ -790,7 +934,7 @@ function Products() {
                 required
               >
                 <option value="">-- เลือกหมวดหมู่ --</option>
-                {categories.map(cat => (
+                {categories.map((cat) => (
                   <option key={cat.category_id} value={cat.category_id}>
                     {cat.category_name}
                   </option>
@@ -798,19 +942,19 @@ function Products() {
               </select>
             </div>
 
-            {/* 2) รหัสสินค้า */}
+            {/* 2) รหัสสินค้า (โชว์อย่างเดียวจาก /next-code) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                รหัสสินค้า <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">รหัสสินค้า</label>
               <input
-                name="product_code"
-                placeholder="กรอกรหัสสินค้า"
-                value={newProduct.product_code}
-                onChange={handleAddChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                required
+                type="text"
+                value={codeLoading ? 'กำลังสร้าง…' : (nextCode || '-')}
+                readOnly
+                disabled
+                className="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-600 rounded-lg"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                ระบบจะออกเลขจริงขณะบันทึก (ตัวเลขนี้อาจเปลี่ยนหากมีการเพิ่มพร้อมกัน)
+              </p>
             </div>
 
             {/* 3) ชื่อสินค้า */}
@@ -872,7 +1016,9 @@ function Products() {
               >
                 <option value="">-- เลือกสี --</option>
                 {colorOptions.map((color) => (
-                  <option key={color} value={color}>{color}</option>
+                  <option key={color} value={color}>
+                    {color}
+                  </option>
                 ))}
               </select>
             </div>
@@ -892,9 +1038,7 @@ function Products() {
 
             {/* 8) รายละเอียด */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                รายละเอียดสินค้า
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">รายละเอียดสินค้า</label>
               <textarea
                 name="description"
                 placeholder="กรอกรายละเอียดสินค้า"
@@ -905,7 +1049,7 @@ function Products() {
               />
             </div>
 
-            {/* 9) รูปภาพ */}
+            {/* 9) รูปภาพ + พรีวิวก่อนบันทึก */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">รูปภาพ</label>
               <input
@@ -915,6 +1059,26 @@ function Products() {
                 accept="image/*"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
+              {addPreview && (
+                <div className="mt-3 flex items-center gap-3">
+                  <img
+                    src={addPreview}
+                    alt="พรีวิวรูปสินค้า"
+                    className="w-24 h-24 object-cover rounded-lg border border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      URL.revokeObjectURL(addPreview);
+                      setAddPreview(null);
+                      setNewProduct((prev) => ({ ...prev, image: null }));
+                    }}
+                    className="px-3 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
+                  >
+                    ลบรูป
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 10) สถานะ */}
@@ -922,9 +1086,11 @@ function Products() {
               <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
               <select
                 name="status"
-                value={newProduct.status}
-                onChange={handleAddChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                value={newProduct?.status ?? 'active'}
+                onChange={(e) =>
+                  setNewProduct((prev) => ({ ...prev, status: e.target.value }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
               >
                 <option value="active">แสดง</option>
                 <option value="inactive">ไม่แสดง</option>

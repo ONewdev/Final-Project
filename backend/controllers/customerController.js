@@ -52,27 +52,17 @@ exports.getAllCustomers = async (req, res) => {
     const sortDirection = order === 'asc' ? 'asc' : 'desc';
 
     const query = db('customers')
-      .leftJoin('subdistricts', 'customers.subdistrict_id', 'subdistricts.id')
-      .leftJoin('districts', 'customers.district_id', 'districts.id')
-      .leftJoin('provinces', 'customers.province_id', 'provinces.id')
       .select(
-        'customers.id',
-        'customers.email',
-        'customers.name',
-        'customers.status',
-        'customers.profile_picture',
-        'customers.phone',
-        'customers.address',
-        'customers.subdistrict_id',
-        'customers.district_id',
-        'customers.province_id',
-        'customers.created_at',
-        'subdistricts.name_th as subdistrict_name',
-        'districts.name_th as district_name',
-        'provinces.name_th as province_name',
-        'subdistricts.postal_code'
+        'id',
+        'email',
+        'name',
+        'status',
+        'profile_picture',
+        'phone',
+        'address',
+        'created_at'
       )
-      .orderBy('customers.created_at', sortDirection);
+      .orderBy('created_at', sortDirection);
 
     if (!Number.isNaN(parsedLimit) && parsedLimit > 0) {
       query.limit(parsedLimit);
@@ -194,17 +184,10 @@ exports.login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' });
 
-    const token = jwt.sign(
-      { user_id: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES }
-    );
-
-    res.status(200).json({
-      message: 'เข้าสู่ระบบสำเร็จ',
-      user: { id: user.id, name: user.name, email: user.email, status: user.status },
-      token
-    });
+    // เซ็ต session
+    req.session.user = { id: user.id, name: user.name, email: user.email, status: user.status };
+const token = jwt.sign({ user_id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+res.status(200).json({ message: '?????????????????', user: { id: user.id, name: user.name, email: user.email, status: user.status }, token });
   } catch (error) {
     console.error('Login error:', error.message);
     res.status(500).json({ message: 'ไม่สามารถเข้าสู่ระบบได้' });
@@ -332,26 +315,16 @@ exports.getCustomerById = async (req, res) => {
 
   try {
     const user = await db('customers')
-      .leftJoin('subdistricts', 'customers.subdistrict_id', 'subdistricts.id')
-      .leftJoin('districts', 'customers.district_id', 'districts.id')
-      .leftJoin('provinces', 'customers.province_id', 'provinces.id')
       .select(
-        'customers.id',
-        'customers.email',
-        'customers.name',
-        'customers.status',
-        'customers.profile_picture',
-        'customers.phone',
-        'customers.address',
-        'customers.subdistrict_id',
-        'customers.district_id',
-        'customers.province_id',
-        'subdistricts.name_th as subdistrict_name',
-        'districts.name_th as district_name',
-        'provinces.name_th as province_name',
-        'subdistricts.postal_code'
+        'id',
+        'email',
+        'name',
+        'status',
+        'profile_picture',
+        'phone',
+        'address'
       )
-      .where('customers.id', id)
+      .where('id', id)
       .first();
 
     if (!user) return res.status(404).json({ message: 'ไม่พบบัญชีลูกค้า' });
@@ -365,10 +338,8 @@ exports.getCustomerById = async (req, res) => {
 // อัปเดตโปรไฟล์ลูกค้า (อัปเดต updated_at เสมอ)
 exports.updateCustomerProfile = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phone, address, subdistrict_id, district_id, province_id, postal_code } = req.body;
+  const { name, email, phone, address } = req.body;
   let profile_picture = req.body.profile_picture;
-
-  const toIntOrNull = v => (v === '' || v === 'null' || v == null ? null : Number(v));
 
   try {
     if (req.file) {
@@ -381,12 +352,8 @@ exports.updateCustomerProfile = async (req, res) => {
       email,
       phone,
       address,
-      subdistrict_id: toIntOrNull(subdistrict_id),
-      district_id: toIntOrNull(district_id),
-      province_id: toIntOrNull(province_id),
       updated_at
     };
-    if (typeof postal_code !== 'undefined') updateData.postal_code = postal_code;
     if (profile_picture) updateData.profile_picture = profile_picture;
 
     await db('customers').where({ id }).update(updateData);
@@ -400,11 +367,7 @@ exports.updateCustomerProfile = async (req, res) => {
         'status',
         'profile_picture',
         'phone',
-        'address',
-        'province_id',
-        'district_id',
-        'subdistrict_id',
-        'postal_code'
+        'address'
       )
       .where({ id })
       .first();
@@ -454,42 +417,7 @@ exports.getCustomerFavorites = async (req, res) => {
 };
 
 // ========================================================
-// Location master data
-// ========================================================
-exports.getProvinces = async (req, res) => {
-  try {
-    const provinces = await db('provinces').select('id', 'name_th');
-    res.json(provinces);
-  } catch (error) {
-    res.status(500).json({ message: 'ไม่สามารถดึงรายชื่อจังหวัดได้' });
-  }
-};
-
-exports.getDistricts = async (req, res) => {
-  const { province_id } = req.query;
-  try {
-    if (!province_id) return res.status(400).json({ message: 'กรุณาระบุ province_id' });
-    const districts = await db('districts')
-      .where('province_id', province_id)
-      .select('id', 'name_th');
-    res.json(districts);
-  } catch (error) {
-    res.status(500).json({ message: 'ไม่สามารถดึงอำเภอได้' });
-  }
-};
-
-exports.getSubdistricts = async (req, res) => {
-  const { district_id } = req.query;
-  try {
-    if (!district_id) return res.status(400).json({ message: 'กรุณาระบุ district_id' });
-    const subdistricts = await db('subdistricts')
-      .where('district_id', district_id)
-      .select('id', 'name_th', 'postal_code');
-    res.json(subdistricts);
-  } catch (error) {
-    res.status(500).json({ message: 'ไม่สามารถดึงตำบลได้' });
-  }
-};
+// ...existing code...
 
 // ========================================================
 // Email Verification & Password Reset
@@ -613,3 +541,5 @@ exports.resetPassword = async (req, res) => {
     res.status(500).json({ message: 'ไม่สามารถรีเซ็ตรหัสผ่านได้' });
   }
 };
+
+

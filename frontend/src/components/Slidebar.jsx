@@ -60,4 +60,4 @@ function Slidebar({ slides }) {
 
 }
 
-export default Slidebar;
+export default Slidebar;  

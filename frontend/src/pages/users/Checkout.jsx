@@ -190,10 +190,8 @@ function Checkout() {
         throw new Error(result?.message || 'ไม่สามารถส่งคำสั่งซื้อได้ในขณะนี้');
       }
 
-      if (!location.state?.items) {
-        await clearCartItems();
-        window.dispatchEvent(new Event('cartUpdated'));
-      }
+      await clearCartItems();
+      window.dispatchEvent(new Event('cartUpdated'));
       setCart([]);
       await Swal.fire({
         icon: 'success',

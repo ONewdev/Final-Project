@@ -1,9 +1,9 @@
-import React, { useEffect } from "react";
+﻿import React, { useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import HomeRoutes from "./routes/HomeRoutes";
 import AdminRoutes from "./routes/AdminRoutes";
 import UsersRoutes from "./routes/UsersRoutes";
-import ChatWidget from "./components/ChatWidget";
+import { ChatWidget } from "./components/ChatWidget";
 import "./App.css";
 
 function App() {

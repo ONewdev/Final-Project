@@ -7,13 +7,16 @@ import Products from "../pages/admin/Products";
 import Category from "../pages/admin/Category";
 import Orders from "../pages/admin/Orders";
 import AdminOrderDetail from "../pages/admin/OrderDetail";
-import PaymentCheck from "../pages/admin/PaymentCheck"; 
-import ChatAdmin from "../pages/admin/ChatAdmin"; 
+import PaymentOrderCheck from "../pages/admin/PaymentOrderCheck";
+import PaymentCustomCheck from "../pages/admin/PaymentCustomCheck";
+import ChatAdmin from "../pages/admin/ChatAdmin";
 import Contact from "../pages/admin/Contact";
 import IncomeExpensePage from "../pages/admin/IncomeExpensePage";
+import IncomeExpenseForm from "../pages/admin/IncomeExpenseForm";
 import Inbox from "../pages/admin/Inbox";
 import MaterialsAdmin from "../pages/admin/MaterialsAdmin";
-import OrdersCustom from "../pages/admin/OrdersCustom"; 
+import OrdersCustom from "../pages/admin/OrdersCustom";
+import ShippingRatesPage from "../pages/admin/ShippingRatesPage";
 import Login from "../pages/admin/Login";
 import PrivateRoute from "../utils/PrivateRoute";
 
@@ -33,13 +36,17 @@ export default function AdminRoutes() {
           <Route path="categories" element={<Category />} />
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<AdminOrderDetail />} />
-          <Route path="payment-check" element={<PaymentCheck />} /> 
-          <Route path="chat" element={<ChatAdmin />} /> 
+          
+          <Route path="payment-order-check" element={<PaymentOrderCheck />} />
+          <Route path="payment-custom-check" element={<PaymentCustomCheck />} />
+          <Route path="chat" element={<ChatAdmin />} />
           <Route path="inbox" element={<Inbox />} />
           <Route path="materials" element={<MaterialsAdmin />} />
           <Route path="contact" element={<Contact />} />
           <Route path="custom-orders" element={<OrdersCustom />} />
-          <Route path="income-expense" element={<IncomeExpensePage />} />
+          <Route path="income-expense/form" element={<IncomeExpenseForm />} />
+          <Route path="income-expense/report" element={<IncomeExpensePage />} />
+          <Route path="shipping-rates" element={<ShippingRatesPage />} />
         </Route>
       </Route>
     </Routes>

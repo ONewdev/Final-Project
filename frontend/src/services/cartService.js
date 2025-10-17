@@ -5,7 +5,7 @@ const fallbackHost = () => {
   return 'http://localhost:3001';
 };
 
-const baseUrl = (import.meta?.env?.VITE_HOST ?? fallbackHost()) + '/api/cart';
+const baseUrl = '/api/cart';
 
 const buildHeaders = () => {
   const headers = { 'Content-Type': 'application/json' };
@@ -13,7 +13,7 @@ const buildHeaders = () => {
     const token = localStorage.getItem('token');
     if (token) headers.Authorization = `Bearer ${token}`;
   } catch {
-    // ignore storage errors
+    
   }
   return headers;
 };

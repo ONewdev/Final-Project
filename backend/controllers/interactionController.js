@@ -66,6 +66,30 @@ exports.checkRatingStatus = async (req, res) => {
   }
 };
 
+// Get rating summary (average and count) for a product
+exports.getRatingSummary = async (req, res) => {
+  const { product_id } = req.query;
+  if (!product_id) {
+    return res.status(400).json({ message: 'Missing product_id' });
+  }
+
+  try {
+    const row = await db('product_ratings')
+      .where({ product_id })
+      .avg({ avg_rating: 'rating' })
+      .count({ rating_count: 'id' })
+      .first();
+
+    const avg = row && row.avg_rating != null ? Number(row.avg_rating) : 0;
+    const count = row && row.rating_count != null ? Number(row.rating_count) : 0;
+
+    return res.json({ avg_rating: avg, rating_count: count });
+  } catch (err) {
+    console.error('Error fetching rating summary:', err);
+    return res.status(500).json({ message: 'Error fetching rating summary', error: err });
+  }
+};
+
 
 
 // ----- FAVORITE -----
@@ -91,12 +115,7 @@ exports.unfavoriteProduct = async (req, res) => {
   res.json({ success: true });
 };
 
-// ----- เช็คสถานะ -----
-exports.checkLikeStatus = async (req, res) => {
-  const { customer_id, product_id } = req.query;
-  const liked = await db('likes').where({ customer_id, product_id }).first();
-  res.json({ liked: !!liked });
-};
+
 
 exports.checkFavoriteStatus = async (req, res) => {
   const { customer_id, product_id } = req.query;

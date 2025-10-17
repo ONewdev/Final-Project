@@ -263,7 +263,7 @@ export default function ContactAdmin() {
       className="max-w-3xl mx-auto bg-white shadow rounded-lg p-8"
       style={{ fontFamily: "'Kanit', sans-serif" }}
     >
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">จัดการข้อมูลการติดต่อ</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">จัดการการข้อมูลร้าน</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* ชื่อร้าน */}

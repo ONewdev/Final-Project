@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import th from 'date-fns/locale/th';
 import DataTable from 'react-data-table-component';
 import Swal from 'sweetalert2';
 
@@ -38,12 +41,51 @@ const nextStatus = {
 };
 
 function OrdersCustom() {
+  // helper ISO <-> Date
+  const isoToDate = (iso) => {
+    if (!iso) return null;
+    const d = new Date(`${iso}T00:00:00`);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const dateToISO = (date) => {
+    if (!date) return '';
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+  // ThaiDatePicker component
+  const ThaiDatePicker = ({ valueISO, onChangeISO, ...props }) => (
+    <DatePicker
+      selected={isoToDate(valueISO)}
+      onChange={(date) => onChangeISO(dateToISO(date))}
+      dateFormat="dd/MM/yyyy"
+      locale={th}
+      className="border rounded w-full p-2"
+      placeholderText="วัน/เดือน/ปี"
+      isClearable
+      showYearDropdown
+      scrollableYearDropdown
+      yearDropdownItemNumber={40}
+      {...props}
+    />
+  );
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchText, setSearchText] = useState('');
-  const [startDate, setStartDate] = useState(''); // yyyy-MM-dd จาก <input type="date">
-  const [endDate, setEndDate] = useState('');     // yyyy-MM-dd จาก <input type="date">
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Modal เดิม
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // สำหรับลำดับต่อเนื่องตามหน้า
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const startIndex = (currentPage - 1) * perPage;
 
   useEffect(() => {
     fetch(`${host}/api/custom-orders/orders`)
@@ -65,7 +107,7 @@ function OrdersCustom() {
 
   // ✅ แสดง OC# จาก custom_code และทำ fallback อัตโนมัติ
   const getDisplayCustomCode = useCallback((o) => {
-    if (o?.custom_code) return o.custom_code; // มีจาก DB/trigger แล้ว
+    if (o?.custom_code) return o.custom_code;
     const d = o?.created_at ? new Date(o.created_at) : new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -82,6 +124,16 @@ function OrdersCustom() {
         title: 'คัดลอกรหัสแล้ว', showConfirmButton: false, timer: 1200
       });
     } catch {}
+  };
+
+  // ใช้ Modal เดิม: เปิดเมื่อคลิกแถว
+  const handleViewDetail = (order) => {
+    setSelectedOrder(order);
+    setShowDetailModal(true);
+  };
+  const closeDetailModal = () => {
+    setSelectedOrder(null);
+    setShowDetailModal(false);
   };
 
   const updateStatus = async (id, status) => {
@@ -105,7 +157,6 @@ function OrdersCustom() {
 
       if (!response.ok) throw new Error('Failed to update status');
 
-      // ถ้า backend map approved -> waiting_payment
       const mapped = status === 'approved' ? 'waiting_payment' : status;
       setOrders(prev => prev.map(o => (o.id === id ? { ...o, status: mapped } : o)));
 
@@ -130,29 +181,42 @@ function OrdersCustom() {
         (o.product_type && o.product_type.toLowerCase().includes(lower)) ||
         (o.color && o.color.toLowerCase().includes(lower)) ||
         (o.status && (statusMapping[o.status] || o.status).toLowerCase().includes(lower)) ||
-        (o.custom_code && o.custom_code.toLowerCase().includes(lower)) ||  // ✅ ค้นด้วย custom_code
-        (getDisplayCustomCode(o).toLowerCase().includes(lower))            // ✅ fallback code
+        (o.custom_code && o.custom_code.toLowerCase().includes(lower)) ||
+        (getDisplayCustomCode(o).toLowerCase().includes(lower))
       );
     }
 
-    // ✅ กรองวันที่แบบแม่นยำ: แปลงเป็น Date และให้ endDate ครอบคลุมถึง 23:59:59
-    const start = startDate ? new Date(startDate) : null; // yyyy-MM-dd -> Date
+    // ✅ กรองวันที่ (end ครอบคลุมถึงก่อนเที่ยงคืนวันถัดไป)
+    const start = startDate ? new Date(startDate) : null;
     const end = endDate
       ? new Date(new Date(endDate).getFullYear(), new Date(endDate).getMonth(), new Date(endDate).getDate() + 1)
-      : null; // บวก 1 วันเพื่อใช้ < end (เทียบก่อนเที่ยงคืนวันถัดไป)
+      : null;
 
-    if (start) {
-      result = result.filter(o => o.created_at && new Date(o.created_at) >= start);
-    }
-    if (end) {
-      result = result.filter(o => o.created_at && new Date(o.created_at) < end);
-    }
+    if (start) result = result.filter(o => o.created_at && new Date(o.created_at) >= start);
+    if (end)   result = result.filter(o => o.created_at && new Date(o.created_at) < end);
 
     return result;
   }, [orders, filterStatus, searchText, startDate, endDate, getDisplayCustomCode]);
 
+  // รีเซ็ตหน้าเป็นหน้า 1 เมื่อกรอง/ค้นหา/ช่วงวันที่เปลี่ยน หรือข้อมูลเปลี่ยน
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus, searchText, startDate, endDate, orders]);
+
   const columns = useMemo(
     () => [
+      // ⭐ คอลัมน์ลำดับ
+      {
+        name: 'ลำดับ',
+        width: '90px',
+        center: true,
+        cell: (_row, index) => <span className="font-mono">{startIndex + index + 1}</span>,
+      },
+      // 👈 ย้าย 'วันที่สั่ง' มาหลัง 'ลำดับ'
+      {
+        name: 'วันที่สั่ง',
+        selector: (row) => (row.created_at ? new Date(row.created_at).toLocaleString('th-TH') : '-'),
+      },
       {
         name: 'รหัสสั่งทำ',
         width: '210px',
@@ -178,15 +242,29 @@ function OrdersCustom() {
       { name: 'สี', selector: (row) => row.color || '-' },
       { name: 'จำนวน', selector: (row) => row.quantity },
       {
-        name: 'ราคา',
+        name: 'ราคาสินค้า',
         selector: (row) =>
           Number.isFinite(Number(row.price))
             ? `฿${Number(row.price).toLocaleString('th-TH')}`
             : '-',
       },
-      {
-        name: 'วันที่สั่ง',
-        selector: (row) => (row.created_at ? new Date(row.created_at).toLocaleString('th-TH') : '-'),
+      { 
+        name: 'ค่าส่ง', 
+        selector: (row) => {
+          const shippingFee = Number(row.shipping_fee) || 0;
+          const method = row.shipping_method;
+          if (method === 'pickup') return 'รับหน้าร้าน';
+          return shippingFee > 0 ? `฿${shippingFee.toLocaleString('th-TH')}` : '-';
+        },
+      },
+      { 
+        name: 'ราคารวม', 
+        selector: (row) => {
+          const productPrice = Number(row.price) || 0;
+          const shippingFee = Number(row.shipping_fee) || 0;
+          const total = productPrice + shippingFee;
+          return `฿${total.toLocaleString('th-TH')}`;
+        },
       },
       {
         name: 'สถานะ',
@@ -196,23 +274,28 @@ function OrdersCustom() {
           </span>
         ),
       },
+      // 🔧 เอาปุ่ม "ดูรายละเอียด" ออก เหลือเฉพาะ select เปลี่ยนสถานะ
       {
         name: 'จัดการ',
+        width: '220px',
         cell: (row) => (
-          <select
-            value={row.status}
-            onChange={e => updateStatus(row.id, e.target.value)}
-            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-          >
-            <option value={row.status}>{statusMapping[row.status] || row.status}</option>
-            {nextStatus[row.status]?.map((value) => (
-              <option key={value} value={value}>{statusMapping[value] || value}</option>
-            ))}
-          </select>
+          <div className="flex gap-2">
+            <select
+              value={row.status}
+              onChange={e => updateStatus(row.id, e.target.value)}
+              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-sm"
+              onClick={(e) => e.stopPropagation()} // กันไม่ให้เปิดโมดัลเวลาเปลี่ยนสถานะ
+            >
+              <option value={row.status}>{statusMapping[row.status] || row.status}</option>
+              {nextStatus[row.status]?.map((value) => (
+                <option key={value} value={value}>{statusMapping[value] || value}</option>
+              ))}
+            </select>
+          </div>
         ),
       },
     ],
-    [getDisplayCustomCode]
+    [getDisplayCustomCode, startIndex]
   );
 
   if (loading) {
@@ -255,22 +338,16 @@ function OrdersCustom() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">วันที่เริ่มต้น</label>
-            <input
-              type="date"
-              lang="th-TH"                 // ✅ แสดง dd/mm/yyyy
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)} // state = yyyy-MM-dd
-              className="border rounded w-full p-2"
+            <ThaiDatePicker
+              valueISO={startDate}
+              onChangeISO={setStartDate}
             />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">ถึงวันที่</label>
-            <input
-              type="date"
-              lang="th-TH"                 // ✅ แสดง dd/mm/yyyy
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}   // state = yyyy-MM-dd
-              className="border rounded w-full p-2"
+            <ThaiDatePicker
+              valueISO={endDate}
+              onChangeISO={setEndDate}
             />
           </div>
         </div>
@@ -281,11 +358,170 @@ function OrdersCustom() {
           columns={columns}
           data={filteredOrders}
           pagination
+          paginationPerPage={perPage}
+          onChangePage={(page) => setCurrentPage(page)}
+          onChangeRowsPerPage={(newPerPage, page) => {
+            setPerPage(newPerPage);
+            setCurrentPage(page);
+          }}
           highlightOnHover
           pointerOnHover
+          onRowClicked={(row) => handleViewDetail(row)} // ← คลิกแถวเพื่อเปิดโมดัลรายละเอียด (ใช้ modal เดิม)
         />
       ) : (
         <p className="text-gray-500">ไม่พบรายการสั่งทำ</p>
+      )}
+
+      {/* Modal รายละเอียดออเดอร์ (เดิม) */}
+      {showDetailModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  รายละเอียดสั่งทำสินค้า - {getDisplayCustomCode(selectedOrder)}
+                </h3>
+                <button
+                  onClick={closeDetailModal}
+                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* ข้อมูลหลัก */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-lg mb-3 text-gray-800">ข้อมูลลูกค้า</h4>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">ชื่อลูกค้า:</span> {selectedOrder.customer_name || '-'}</p>
+                    <p><span className="font-medium">เบอร์โทร:</span> {selectedOrder.phone || '-'}</p>
+                    <p><span className="font-medium">ที่อยู่:</span> {selectedOrder.address || '-'}</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-lg mb-3 text-gray-800">ข้อมูลสินค้า</h4>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">ประเภท:</span> {selectedOrder.product_type || '-'}</p>
+                    <p><span className="font-medium">ขนาด:</span> {selectedOrder.width}x{selectedOrder.height} {selectedOrder.unit}</p>
+                    <p><span className="font-medium">สี:</span> {selectedOrder.color || '-'}</p>
+                    <p><span className="font-medium">จำนวน:</span> {selectedOrder.quantity}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ข้อมูลราคาและสถานะ */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-lg mb-3 text-gray-800">ข้อมูลราคา</h4>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">ราคาสินค้า:</span> 
+                      {Number.isFinite(Number(selectedOrder.price)) 
+                        ? `฿${Number(selectedOrder.price).toLocaleString('th-TH')}` 
+                        : '-'}
+                    </p>
+                    <p><span className="font-medium">ค่าส่ง:</span> 
+                      {selectedOrder.shipping_method === 'pickup' 
+                        ? 'รับหน้าร้าน' 
+                        : (Number(selectedOrder.shipping_fee) || 0) > 0 
+                          ? `฿${Number(selectedOrder.shipping_fee).toLocaleString('th-TH')}` 
+                          : '-'}
+                    </p>
+                    <p><span className="font-medium">ราคารวม:</span> 
+                      <span className="text-lg font-bold text-green-600">
+                        {(() => {
+                          const productPrice = Number(selectedOrder.price) || 0;
+                          const shippingFee = Number(selectedOrder.shipping_fee) || 0;
+                          const total = productPrice + shippingFee;
+                          return `฿${total.toLocaleString('th-TH')}`;
+                        })()}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-lg mb-3 text-gray-800">สถานะและวันที่</h4>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">สถานะปัจจุบัน:</span> 
+                      <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${statusColors[selectedOrder.status] || 'bg-gray-100 text-gray-800'}`}>
+                        {statusMapping[selectedOrder.status] || selectedOrder.status}
+                      </span>
+                    </p>
+                    <p><span className="font-medium">วันที่สั่ง:</span> 
+                      {selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleString('th-TH') : '-'}
+                    </p>
+                    <p><span className="font-medium">วันที่อัพเดท:</span> 
+                      {selectedOrder.updated_at ? new Date(selectedOrder.updated_at).toLocaleString('th-TH') : '-'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ข้อมูลการจัดส่ง */}
+              <div className="bg-purple-50 p-4 rounded-lg mb-6">
+                <h4 className="font-semibold text-lg mb-3 text-gray-800">ข้อมูลการจัดส่ง</h4>
+                <div className="space-y-2">
+                  <p><span className="font-medium">วิธีการจัดส่ง:</span> 
+                    {selectedOrder.shipping_method === 'pickup' ? 'รับหน้าร้าน' : 'จัดส่ง'}
+                  </p>
+                  {selectedOrder.shipping_method === 'delivery' && (
+                    <>
+                      <p><span className="font-medium">ที่อยู่จัดส่ง:</span> {selectedOrder.shipping_address || '-'}</p>
+                      <p><span className="font-medium">เบอร์โทร:</span> {selectedOrder.phone || '-'}</p>
+                      <p><span className="font-medium">รหัสไปรษณีย์:</span> {selectedOrder.postal_code || '-'}</p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* รายละเอียดเพิ่มเติม */}
+              {(selectedOrder.description || selectedOrder.note || selectedOrder.special_request) && (
+                <div className="bg-yellow-50 p-4 rounded-lg mb-6">
+                  <h4 className="font-semibold text-lg mb-3 text-gray-800">รายละเอียดเพิ่มเติม</h4>
+                  <div className="space-y-2">
+                    {selectedOrder.description && (
+                      <p><span className="font-medium">คำอธิบาย:</span> {selectedOrder.description}</p>
+                    )}
+                    {selectedOrder.note && (
+                      <p><span className="font-medium">หมายเหตุ:</span> {selectedOrder.note}</p>
+                    )}
+                    {selectedOrder.special_request && (
+                      <p><span className="font-medium">คำขอพิเศษ:</span> {selectedOrder.special_request}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ปุ่มจัดการ */}
+              <div className="flex justify-between items-center pt-4 border-t">
+                <div className="flex gap-2">
+                  <select
+                    value={selectedOrder.status}
+                    onChange={e => {
+                      updateStatus(selectedOrder.id, e.target.value);
+                      setSelectedOrder({...selectedOrder, status: e.target.value});
+                    }}
+                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                  >
+                    <option value={selectedOrder.status}>{statusMapping[selectedOrder.status] || selectedOrder.status}</option>
+                    {nextStatus[selectedOrder.status]?.map((value) => (
+                      <option key={value} value={value}>{statusMapping[value] || value}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={closeDetailModal}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                >
+                  ปิด
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 
 const host = import.meta.env.VITE_HOST || '';
 
+
+// สถานะภาษาไทย
 const STATUS_TEXT = {
-  pending: 'รออนุมัติ',
-  approved: 'อนุมัติแล้ว',
+  pending: 'รอดำเนินการ',
+  approved: 'อนุมัติ',
   rejected: 'ไม่อนุมัติ',
   waiting_payment: 'รอชำระเงิน',
   paid: 'ชำระเงินแล้ว',
@@ -158,8 +160,28 @@ function OrdersCustom() {
                 <div className="mb-2"><span className="font-semibold">สี:</span> {o.color || '-'}</div>
                 <div className="mb-2"><span className="font-semibold">จำนวน:</span> {o.quantity}</div>
                 <div className="mb-2">
-                  <span className="font-semibold">ราคา:</span>{' '}
+                  <span className="font-semibold">ราคาสินค้า:</span>{' '}
                   <span className="text-blue-700 font-bold">฿{Number(o.price || 0).toLocaleString()}</span>
+                </div>
+                <div className="mb-2">
+                  <span className="font-semibold">ค่าส่ง:</span>{' '}
+                  <span className="text-orange-600 font-bold">
+                    {o.shipping_method === 'pickup' 
+                      ? 'รับหน้าร้าน' 
+                      : (Number(o.shipping_fee) || 0) > 0 
+                        ? `฿${Number(o.shipping_fee).toLocaleString()}` 
+                        : 'ฟรี'}
+                  </span>
+                </div>
+                <div className="mb-2">
+                  <span className="font-semibold">ราคารวม:</span>{' '}
+                  <span className="text-green-600 font-bold text-lg">
+                    ฿{(() => {
+                      const productPrice = Number(o.price) || 0;
+                      const shippingFee = Number(o.shipping_fee) || 0;
+                      return (productPrice + shippingFee).toLocaleString();
+                    })()}
+                  </span>
                 </div>
                 <div className="mb-2"><span className="font-semibold">วันที่สั่ง:</span> {formatDateTimeTH(o.created_at)}</div>
 
@@ -226,9 +248,46 @@ function OrdersCustom() {
                 <div><span className="font-semibold">สี:</span> {modalOrder.color}</div>
                 <div><span className="font-semibold">จำนวน:</span> {modalOrder.quantity}</div>
                 <div>
-                  <span className="font-semibold">ราคา:</span>{' '}
+                  <span className="font-semibold">ราคาสินค้า:</span>{' '}
                   <span className="text-blue-700 font-bold">฿{Number(modalOrder.price || 0).toLocaleString()}</span>
                 </div>
+                <div>
+                  <span className="font-semibold">ค่าส่ง:</span>{' '}
+                  <span className="text-orange-600 font-bold">
+                    {modalOrder.shipping_method === 'pickup' 
+                      ? 'รับหน้าร้าน' 
+                      : (Number(modalOrder.shipping_fee) || 0) > 0 
+                        ? `฿${Number(modalOrder.shipping_fee).toLocaleString()}` 
+                        : 'ฟรี'}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold">ราคารวม:</span>{' '}
+                  <span className="text-green-600 font-bold text-lg">
+                    ฿{(() => {
+                      const productPrice = Number(modalOrder.price) || 0;
+                      const shippingFee = Number(modalOrder.shipping_fee) || 0;
+                      return (productPrice + shippingFee).toLocaleString();
+                    })()}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-semibold">วิธีการจัดส่ง:</span>{' '}
+                  {modalOrder.shipping_method === 'pickup' ? 'รับหน้าร้าน' : 'จัดส่ง'}
+                </div>
+                {modalOrder.shipping_method === 'delivery' && (
+                  <>
+                    <div>
+                      <span className="font-semibold">ที่อยู่จัดส่ง:</span> {modalOrder.shipping_address || '-'}
+                    </div>
+                    <div>
+                      <span className="font-semibold">เบอร์โทร:</span> {modalOrder.phone || '-'}
+                    </div>
+                    <div>
+                      <span className="font-semibold">รหัสไปรษณีย์:</span> {modalOrder.postal_code || '-'}
+                    </div>
+                  </>
+                )}
                 <div><span className="font-semibold">วันที่สั่ง:</span> {formatDateTimeTH(modalOrder.created_at)}</div>
 
                 {modalOrder.details && (

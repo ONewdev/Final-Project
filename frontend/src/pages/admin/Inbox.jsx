@@ -1,5 +1,6 @@
- import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import DataTable from 'react-data-table-component';
+import { FaSearch, FaTimes } from 'react-icons/fa';
 
 export default function Inbox() {
   const host = import.meta.env.VITE_HOST || '';
@@ -34,7 +35,20 @@ export default function Inbox() {
     );
   }, [messages, search]);
 
+  // เติมลำดับ (_no) ตามรายการที่กรองแล้ว
+  const displayedMessages = useMemo(
+    () => filteredMessages.map((m, idx) => ({ ...m, _no: idx + 1 })),
+    [filteredMessages]
+  );
+
   const columns = [
+    {
+      name: 'ลำดับ',
+      selector: (row) => row._no,
+      width: '80px',
+      center: true,
+      sortable: true,
+    },
     { name: 'ชื่อผู้ติดต่อ', selector: (row) => row.name ?? '-' },
     { name: 'อีเมล', selector: (row) => row.email ?? '-' },
     { name: 'เบอร์โทร', selector: (row) => row.phone ?? '-' },
@@ -59,7 +73,6 @@ export default function Inbox() {
     },
   ];
 
-  // ตัวเลือกภาษาไทยสำหรับเพจเนชัน (ของ react-data-table-component)
   const paginationTH = {
     rowsPerPageText: 'แถวต่อหน้า',
     rangeSeparatorText: 'จาก',
@@ -72,16 +85,21 @@ export default function Inbox() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
         <h2 className="text-2xl font-bold">กล่องข้อความ</h2>
 
+        {/* กล่องค้นหา */}
         <div className="relative w-full md:w-80">
+          <FaSearch
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            aria-hidden="true"
+          />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="ค้นหา: ชื่อ, อีเมล, เบอร์โทร, หัวข้อ, ข้อความ"
-            className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-9 pr-9 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             aria-label="ค้นหาข้อความ"
           />
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 select-none">🔍</span>
           {search && (
             <button
               type="button"
@@ -90,7 +108,7 @@ export default function Inbox() {
               aria-label="ล้างคำค้น"
               title="ล้างคำค้น"
             >
-              ×
+              <FaTimes />
             </button>
           )}
         </div>
@@ -100,12 +118,12 @@ export default function Inbox() {
         <p className="text-gray-500">กำลังโหลดข้อความ...</p>
       ) : messages.length === 0 ? (
         <p className="text-gray-500">ยังไม่มีข้อความ</p>
-      ) : filteredMessages.length === 0 ? (
+      ) : displayedMessages.length === 0 ? (
         <p className="text-gray-500">ไม่พบผลลัพธ์ที่ตรงกับการค้นหา</p>
       ) : (
         <DataTable
           columns={columns}
-          data={filteredMessages}
+          data={displayedMessages}
           pagination
           paginationComponentOptions={paginationTH}
           noDataComponent="ไม่พบข้อมูล"
