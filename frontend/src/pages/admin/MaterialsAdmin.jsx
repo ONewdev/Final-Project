@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DataTable from 'react-data-table-component';
 import { FaSearch, FaTimes, FaEye, FaEyeSlash } from 'react-icons/fa';
+import Swal from 'sweetalert2';
 
 const host = import.meta.env.VITE_HOST || '';
 
@@ -28,6 +29,7 @@ export default function MaterialsAdmin() {
       setRows(Array.isArray(data) ? data : []);
     } catch (err) {
       setError('โหลดข้อมูลไม่สำเร็จ');
+      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: 'โหลดข้อมูลไม่สำเร็จ' });
     } finally {
       setLoading(false);
     }
@@ -43,9 +45,21 @@ export default function MaterialsAdmin() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || 'Update failed');
+
+      // อัปเดตแถวในตาราง
       setRows((prev) => prev.map(r => r.id === row.id ? { ...r, status: data.status } : r));
+
+      // แจ้งเตือนสถานะปัจจุบันหลังสลับ
+      const isShown = data.status === 1;
+      Swal.fire({
+        icon: 'success',
+        title: 'อัปเดตสำเร็จ',
+        text: isShown ? 'สถานะ: แสดงอยู่' : 'สถานะ: ซ่อนอยู่ (ไม่แสดง)',
+        timer: 1400,
+        showConfirmButton: false,
+      });
     } catch (e) {
-      alert('อัปเดตสถานะไม่สำเร็จ');
+      Swal.fire({ icon: 'error', title: 'อัปเดตไม่สำเร็จ', text: 'อัปเดตสถานะไม่สำเร็จ' });
     }
   };
 
@@ -62,29 +76,36 @@ export default function MaterialsAdmin() {
   };
 
   const onDelete = async (r) => {
-    if (!confirm(`ลบรายการนี้หรือไม่? (ID: ${r.id})`)) return;
+    const res = await Swal.fire({
+      icon: 'warning',
+      title: 'ลบรายการนี้หรือไม่?',
+      text: `ID: ${r.id}`,
+      showCancelButton: true,
+      confirmButtonText: 'ลบ',
+      cancelButtonText: 'ยกเลิก',
+    });
+    if (!res.isConfirmed) return;
+
     try {
-      const res = await fetch(`${host}/api/materials/${r.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
+      const del = await fetch(`${host}/api/materials/${r.id}`, { method: 'DELETE' });
+      if (!del.ok) throw new Error('Delete failed');
       await fetchList();
-      alert('ลบสำเร็จ');
+      Swal.fire({ icon: 'success', title: 'ลบสำเร็จ', timer: 1200, showConfirmButton: false });
     } catch (err) {
-      alert('ลบไม่สำเร็จ');
+      Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ' });
     }
   };
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    // ★ ถ้าเป็นโหมดสร้าง: ต้องกรอก code และ name
-    // ★ ถ้าเป็นโหมดแก้ไข: ห้ามแก้ code และจะส่งเฉพาะ name
     const isEdit = !!form.id;
 
     if (!isEdit && (!form.code.trim() || !form.name.trim())) {
-      alert('กรอก code และ name ให้ครบ');
+      Swal.fire({ icon: 'warning', title: 'กรอกข้อมูลไม่ครบ', text: 'กรอก code และ name ให้ครบ' });
       return;
     }
     if (isEdit && !form.name.trim()) {
-      alert('กรอก name ให้ครบ');
+      Swal.fire({ icon: 'warning', title: 'กรอกข้อมูลไม่ครบ', text: 'กรอก name ให้ครบ' });
       return;
     }
 
@@ -92,10 +113,8 @@ export default function MaterialsAdmin() {
     try {
       const url = isEdit ? `${host}/api/materials/${form.id}` : `${host}/api/materials`;
       const method = isEdit ? 'PUT' : 'POST';
-
-      // ★ โหมดแก้ไข: ส่งเฉพาะ name (ไม่ส่ง code)
       const payload = isEdit
-        ? { name: form.name.trim() }                      // ★
+        ? { name: form.name.trim() }
         : { code: form.code.trim(), name: form.name.trim() };
 
       const res = await fetch(url, {
@@ -104,10 +123,12 @@ export default function MaterialsAdmin() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Save failed');
+
       await fetchList();
       setShowModal(false);
+      Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1200, showConfirmButton: false });
     } catch (err) {
-      alert('บันทึกไม่สำเร็จ');
+      Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ' });
     } finally {
       setSaving(false);
     }
@@ -133,17 +154,6 @@ export default function MaterialsAdmin() {
       cell: (row, index) => <span>{index + 1}</span>,
     },
     {
-      name: 'สถานะ',
-      width: '140px',
-      selector: row => (row.status === 0 ? 'ไม่แสดง' : 'แสดง'),
-      cell: (row) => (
-        <span className={`badge ${row.status === 0 ? 'bg-secondary' : 'bg-success'}`}>
-          {row.status === 0 ? 'ไม่แสดง' : 'แสดง'}
-        </span>
-      ),
-      sortable: true,
-    },
-    {
       name: 'รหัส (code)',
       selector: row => row.code,
       sortable: true,
@@ -165,6 +175,19 @@ export default function MaterialsAdmin() {
       },
       sortable: true,
       width: '200px',
+    },
+    // ติดกับปุ่มสลับสถานะ
+    {
+      name: 'สถานะ',
+      width: '140px',
+      selector: row => (row.status === 0 ? 'ไม่แสดง' : 'แสดง'),
+      cell: (row) => (
+        <span className={`badge ${row.status === 0 ? 'bg-secondary' : 'bg-success'}`}>
+          {row.status === 0 ? 'ไม่แสดง' : 'แสดง'}
+        </span>
+      ),
+      sortable: true,
+      right: true,
     },
     {
       name: 'สลับสถานะ',
@@ -273,7 +296,7 @@ export default function MaterialsAdmin() {
                       className="form-control"
                       value={form.code}
                       onChange={(e) => setForm({ ...form, code: e.target.value })}
-                      disabled={!!form.id}            // ★ แก้ไข: ปิดการแก้รหัสเมื่อมี id
+                      disabled={!!form.id}
                     />
                   </div>
                   <div className="mb-3">

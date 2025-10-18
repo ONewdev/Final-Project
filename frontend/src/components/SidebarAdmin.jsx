@@ -103,19 +103,23 @@ export default function SidebarAdmin() {
     const socket = io(
       import.meta.env.VITE_SOCKET_URL || "http://localhost:3001"
     );
-    socket.on("order:new", () => {
-      if (location.pathname !== "/admin/orders")
-        setOrdersUnread((prev) => prev + 1);
-    });
+
+    const handleNewOrder = () => setOrdersUnread((prev) => prev + 1);
+
+    socket.on("order:new", handleNewOrder);
     socket.on("orders:unread:set", (count) =>
       setOrdersUnread(Number(count) || 0)
     );
+
     return () => {
       try {
+        socket.off && socket.off("order:new", handleNewOrder);
         socket.disconnect();
       } catch {}
     };
-  }, [location.pathname]);
+  }, []);
+
+  // Clear orders unread when viewing the orders page
   useEffect(() => {
     if (location.pathname === "/admin/orders") setOrdersUnread(0);
   }, [location.pathname]);

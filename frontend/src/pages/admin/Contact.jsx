@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
 
 const initialFormState = {
@@ -27,6 +28,22 @@ export default function ContactAdmin() {
   const [qrPreview, setQrPreview] = useState('');
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState('');
+  const [removeQr, setRemoveQr] = useState(false);
+  const [removeLogo, setRemoveLogo] = useState(false);
+
+  const confirmImageRemoval = async (label = 'รูปภาพ') => {
+    const result = await Swal.fire({
+      icon: 'warning',
+      title: `ยืนยันการลบ${label}?`,
+      text: 'ต้องการลบรูปนี้หรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก',
+      showCancelButton: true,
+      confirmButtonText: 'ลบ',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+    });
+    return result.isConfirmed;
+  };
 
   const qrImageSrc = useMemo(() => {
     if (qrPreview) return qrPreview;
@@ -54,6 +71,7 @@ export default function ContactAdmin() {
   const handleQrFileChange = (e) => {
     const file = e.target.files?.[0] || null;
     setQrFile(file);
+    setRemoveQr(false);
     if (!file) {
       setQrPreview((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -71,6 +89,7 @@ export default function ContactAdmin() {
   const handleLogoFileChange = (e) => {
     const file = e.target.files?.[0] || null;
     setLogoFile(file);
+    setRemoveLogo(false);
     if (!file) {
       setLogoPreview((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -82,6 +101,44 @@ export default function ContactAdmin() {
     setLogoPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return nextUrl;
+    });
+  };
+
+  const handleRemoveQr = async () => {
+    const ok = await confirmImageRemoval('รูปคิวอาร์โค้ด');
+    if (!ok) return;
+    setRemoveQr(true);
+    setQrFile(null);
+    setFormData((prev) => ({ ...prev, qr_image: '' }));
+    setQrPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return '';
+    });
+    Swal.fire({
+      icon: 'success',
+      title: 'ลบรูปคิวอาร์โค้ดแล้ว',
+      text: 'โปรดกดบันทึกเพื่อยืนยันการเปลี่ยนแปลง',
+      timer: 1100,
+      showConfirmButton: false,
+    });
+  };
+
+  const handleRemoveLogo = async () => {
+    const ok = await confirmImageRemoval('รูปโลโก้');
+    if (!ok) return;
+    setRemoveLogo(true);
+    setLogoFile(null);
+    setFormData((prev) => ({ ...prev, logo: '' }));
+    setLogoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return '';
+    });
+    Swal.fire({
+      icon: 'success',
+      title: 'ลบรูปโลโก้แล้ว',
+      text: 'โปรดกดบันทึกเพื่อยืนยันการเปลี่ยนแปลง',
+      timer: 1100,
+      showConfirmButton: false,
     });
   };
 
@@ -153,6 +210,13 @@ export default function ContactAdmin() {
           if (prev) URL.revokeObjectURL(prev);
           return '';
         });
+        setLogoFile(null);
+        setLogoPreview((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return '';
+        });
+        setRemoveQr(false);
+        setRemoveLogo(false);
       } catch (error) {
         console.error('ไม่สามารถโหลดข้อมูลการติดต่อ:', error);
       } finally {
@@ -219,6 +283,8 @@ export default function ContactAdmin() {
       }
       if (qrFile) {
         body.append('qr_image_file', qrFile);
+      } else if (removeQr) {
+        body.append('qr_image', '');
       }
 
       const res = await fetch(url, {
@@ -263,7 +329,7 @@ export default function ContactAdmin() {
       className="max-w-3xl mx-auto bg-white shadow rounded-lg p-8"
       style={{ fontFamily: "'Kanit', sans-serif" }}
     >
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">จัดการการข้อมูลร้าน</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">จัดการข้อมูลร้านค้า</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* ชื่อร้าน */}
@@ -367,6 +433,7 @@ export default function ContactAdmin() {
           <label className="block font-semibold text-gray-800">โลโก้ร้าน</label>
           <div className="flex flex-col md:flex-row gap-4">
             <div className="w-32 h-32 border border-dashed border-gray-300 rounded-md flex items-center justify-center overflow-hidden bg-gray-50">
+             
               {logoImageSrc ? (
                 <img src={logoImageSrc} alt="โลโก้ร้าน" className="w-full h-full object-cover" />
               ) : (
@@ -381,6 +448,14 @@ export default function ContactAdmin() {
                 onChange={handleLogoFileChange}
                 className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
               />
+              <button
+                type="button"
+                onClick={handleRemoveLogo}
+                disabled={isSubmitting || !logoImageSrc}
+                className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-60"
+              >
+                ลบรูปโลโก้
+              </button>
             </div>
           </div>
         </div>
@@ -404,6 +479,14 @@ export default function ContactAdmin() {
                 onChange={handleQrFileChange}
                 className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
               />
+              <button
+                type="button"
+                onClick={handleRemoveQr}
+                disabled={isSubmitting || !qrImageSrc}
+                className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-60"
+              >
+                ลบรูปคิวอาร์โค้ด
+              </button>
             </div>
           </div>
         </div>

@@ -19,6 +19,7 @@ export default function Navbar() {
     const cached = Number(localStorage.getItem('notif_count') || 0);
     return Number.isFinite(cached) ? cached : 0;
   });
+  const [logoSrc, setLogoSrc] = useState('');
 
   const profileRef = useRef(null);
   const cartRef = useRef(null);
@@ -133,6 +134,34 @@ export default function Navbar() {
     };
   }, [host, user?.id]);
 
+  // Fetch contact info (logo) and refresh when admin updates it
+  useEffect(() => {
+    let aborted = false;
+    const toAbsolute = (url) => {
+      if (!url) return '';
+      if (url.startsWith('/')) return `${host}${url}`;
+      return url;
+    };
+    const fetchContactLogo = async () => {
+      try {
+        const res = await fetch(`${host}/api/contact`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const obj = Array.isArray(data) ? (data[0] || {}) : (data?.data || data || {});
+        if (!aborted) setLogoSrc(toAbsolute(obj.logo || ''));
+      } catch {
+        // ignore
+      }
+    };
+    fetchContactLogo();
+    const onContactUpdated = () => setTimeout(fetchContactLogo, 200);
+    window.addEventListener('contactUpdated', onContactUpdated);
+    return () => {
+      aborted = true;
+      window.removeEventListener('contactUpdated', onContactUpdated);
+    };
+  }, [host]);
+
   // ปิด dropdown เมื่อคลิกนอก
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -200,10 +229,15 @@ export default function Navbar() {
 
             <Link to="/home" className="inline-flex items-center">
               <img
-                src="/images/655fc323-6c03-4394-ba95-5280da436298.jpg"
+                src={logoSrc || '/images/655fc323-6c03-4394-ba95-5280da436298.jpg'}
                 alt="Logo"
                 className="h-10 w-auto"
                 style={{ objectFit: 'contain' }}
+                onError={(e) => {
+                  if (e?.currentTarget && e.currentTarget.src !== window.location.origin + '/images/655fc323-6c03-4394-ba95-5280da436298.jpg') {
+                    e.currentTarget.src = '/images/655fc323-6c03-4394-ba95-5280da436298.jpg';
+                  }
+                }}
               />
             </Link>
           </div>

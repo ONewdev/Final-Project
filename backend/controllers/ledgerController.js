@@ -374,7 +374,9 @@ exports.exportPdf = async (req, res) => {
         const summary = agg(rows);
 
         // ----- PDF -----
-        const doc = new PDFDocument({ size: 'A4', margin: 36 }); // 0.5 นิ้ว
+        const isSplit = req.query.split === 'true';
+        // Use landscape layout for split view so page is horizontal but text stays upright
+        const doc = new PDFDocument({ size: 'A4', margin: 36, layout: isSplit ? 'landscape' : 'portrait' });
         const fontPath = path.join(__dirname, '../fonts/NotoSansThai-Regular.ttf');
         if (fs.existsSync(fontPath)) {
             doc.registerFont('thai', fontPath);
@@ -397,6 +399,10 @@ exports.exportPdf = async (req, res) => {
                 doc.moveDown(0.5);
             }
             doc.font('thai').fontSize(22).fillColor('#0ea5e9').text('รายงานรายรับ-รายจ่าย', hasLogo ? doc.page.margins.left + 70 : doc.page.margins.left, doc.page.margins.top, { align: 'left' });
+            doc.moveDown(0.2);
+            // Add clear sub-title for report topic
+            doc.fontSize(16).fillColor('#111827')
+                .text('รายรับ - รายจ่าย', hasLogo ? doc.page.margins.left + 70 : doc.page.margins.left, doc.y + 2, { align: 'left' });
             doc.moveDown(0.2);
             doc.fontSize(12).fillColor('#555')
                 .text(`ช่วงเวลา: ${from || '-'} ถึง ${to || '-'}`);
@@ -575,6 +581,101 @@ exports.exportPdf = async (req, res) => {
         };
 
         // Footer: หมายเหตุ/ช่องทางติดต่อ
+        // Two-column split (income left, expense right) when splitting
+        const writeTwoColumnSplit = (leftRows, rightRows) => {
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '';
+                const d = new Date(dateStr);
+                if (isNaN(d)) return String(dateStr);
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            };
+
+            const gap = 16;
+            const contentW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+            const panelW = Math.floor((contentW - gap) / 2);
+            const leftX = doc.page.margins.left;
+            const rightX = leftX + panelW + gap;
+
+            const rowH = 22;
+            const headerH = 26;
+
+            const buildCols = (panelWidth) => {
+                const dateW = 80;
+                const amountW = 90;
+                const descW = Math.max(120, panelWidth - dateW - amountW);
+                return [
+                    { key: 'entry_date', label: 'วันที่', width: dateW, align: 'left', map: formatDate },
+                    { key: 'description', label: 'รายละเอียด', width: descW, align: 'left' },
+                    { key: 'amount', label: 'ยอดเงิน', width: amountW, align: 'right', map: v => fmtMoney(v) },
+                ];
+            };
+            const leftCols = buildCols(panelW);
+            const rightCols = buildCols(panelW);
+
+            const drawHeader = (x, y, cols, title, accent) => {
+                doc.fillColor(accent).font('thai').fontSize(15).text(title, x, y - 8, { width: panelW });
+                const totalW = cols.reduce((s, c) => s + c.width, 0);
+                doc.roundedRect(x, y, totalW, headerH, 6).fill('#0ea5e9');
+                doc.fillColor('#fff').fontSize(12);
+                let cx = x;
+                cols.forEach(c => { doc.text(c.label, cx + 8, y + 6, { width: c.width - 16, align: c.align }); cx += c.width; });
+                doc.fillColor('#111827');
+            };
+
+            const drawRow = (x, y, cols, r, isIncome) => {
+                const totalW = cols.reduce((s, c) => s + c.width, 0);
+                doc.moveTo(x, y).lineTo(x + totalW, y).stroke('#e5e7eb');
+                let cx = x;
+                cols.forEach(c => {
+                    const raw = r[c.key];
+                    const val = c.map ? c.map(raw) : raw;
+                    const color = c.key === 'amount' ? (isIncome ? '#16a34a' : '#dc2626') : '#111827';
+                    doc.fillColor(color).font('thai').fontSize(11)
+                        .text(String(val ?? ''), cx + 8, y + 5, { width: c.width - 16, align: c.align, ellipsis: true });
+                    doc.fillColor('#111827'); cx += c.width;
+                });
+            };
+
+            const drawTotals = (x, y, cols, rows, accent) => {
+                const totalW = cols.reduce((s, c) => s + c.width, 0);
+                const sum = rows.reduce((acc, r) => acc + Number(r.amount || 0), 0);
+                doc.roundedRect(x, y, totalW, 32, 6).fill('#eef2ff');
+                doc.fillColor('#111827').font('thai').fontSize(12)
+                   .text('รวม', x + 8, y + 10, { width: totalW - cols[cols.length - 1].width - 16, align: 'right' });
+                doc.fillColor(accent).fontSize(14)
+                   .text(fmtMoney(sum), x + totalW - cols[cols.length - 1].width + 8, y + 9, { width: cols[cols.length - 1].width - 16, align: 'right' });
+                doc.fillColor('#111827');
+            };
+
+            const drawPageHeaders = () => {
+                const yStart = doc.y;
+                drawHeader(leftX, yStart, leftCols, 'รายรับ', '#16a34a');
+                drawHeader(rightX, yStart, rightCols, 'รายจ่าย', '#dc2626');
+                return { yL: yStart + headerH + 2, yR: yStart + headerH + 2 };
+            };
+
+            let iL = 0, iR = 0;
+            let { yL, yR } = drawPageHeaders();
+            const bottom = () => doc.page.height - doc.page.margins.bottom - 48;
+            while (iL < leftRows.length || iR < rightRows.length) {
+                let needPage = false;
+                if (iL < leftRows.length && yL + rowH > bottom()) needPage = true;
+                if (iR < rightRows.length && yR + rowH > bottom()) needPage = true;
+                if (needPage) { doc.addPage(); ({ yL, yR } = drawPageHeaders()); }
+                if (iL < leftRows.length) { drawRow(leftX, yL, leftCols, leftRows[iL], true); yL += rowH; iL++; }
+                if (iR < rightRows.length) { drawRow(rightX, yR, rightCols, rightRows[iR], false); yR += rowH; iR++; }
+            }
+
+            const tH = 36;
+            if (Math.min(yL, yR) + tH > bottom()) { doc.addPage(); ({ yL, yR } = drawPageHeaders()); }
+            drawTotals(leftX, Math.min(yL, yR), leftCols, leftRows, '#16a34a');
+            drawTotals(rightX, Math.min(yL, yR), rightCols, rightRows, '#dc2626');
+            doc.moveDown();
+        };
+
         const writeFooter = () => {
             const y = doc.page.height - doc.page.margins.bottom - 30;
             doc.font('thai').fontSize(10).fillColor('#555').text('หมายเหตุ: รายงานนี้จัดทำจากข้อมูลจริงในระบบ ณ วันที่สร้างเอกสาร', doc.page.margins.left, y, { align: 'left' });
@@ -588,6 +689,15 @@ exports.exportPdf = async (req, res) => {
         doc.pipe(res);
         writeHeader();
         writeSummary();
+        // If split view requested, render side-by-side columns on one page and return
+        if (req.query.split === 'true') {
+            const incomeRows = rows.filter(r => r.type === 'income');
+            const expenseRows = rows.filter(r => r.type === 'expense');
+            writeTwoColumnSplit(incomeRows, expenseRows);
+            writeFooter();
+            doc.end();
+            return;
+        }
         if (req.query.split === 'true') {
             // แยกตาราง รายรับ/รายจ่าย
             const incomeRows = rows.filter(r => r.type === 'income');
