@@ -187,6 +187,7 @@ function CustomOrderPayment() {
           <div><span className="font-semibold">สี:</span> {order.color}</div>
           <div><span className="font-semibold">จำนวน:</span> {order.quantity}</div>
           <div><span className="font-semibold">ยอดชำระ:</span> ฿{Number(order.price || 0).toLocaleString()}</div>
+          <div><span className="font-semibold">ค่าส่ง:</span> ฿{Number(order?.shipping_fee || 0).toLocaleString()}</div>
 
           {/* ✅ แสดงสถานะเป็นภาษาไทย */}
           <div>

@@ -404,9 +404,12 @@ exports.exportPdf = async (req, res) => {
             doc.fontSize(16).fillColor('#111827')
                 .text('รายรับ - รายจ่าย', hasLogo ? doc.page.margins.left + 70 : doc.page.margins.left, doc.y + 2, { align: 'left' });
             doc.moveDown(0.2);
-            doc.fontSize(12).fillColor('#555')
-                .text(`ช่วงเวลา: ${from || '-'} ถึง ${to || '-'}`);
-            doc.text(`ตัวกรอง: ช่องทาง=${source || 'ทั้งหมด'} ประเภท=${type || 'ทั้งหมด'} ค้นหา=${q || '-'}`);
+            // Period line: if no "to" is provided, show "เลือกวันที่ทั้งหมด"
+            doc.fontSize(12).fillColor('#555');
+            const periodLine = to ? `ช่วงเวลา: ${from || '-'} ถึง ${to}` : 'ช่วงเวลา: เลือกวันที่ทั้งหมด';
+            doc.text(periodLine);
+            // Filters line: show only channel and type (remove search)
+            doc.text(`ช่องทาง=${source || 'ทั้งหมด'} ประเภท=${type || 'ทั้งหมด'}`);
             doc.text(`สร้างเมื่อ: ${new Date().toLocaleString('th-TH')}`);
             doc.moveDown(0.6);
             doc.fillColor('#000');
@@ -616,12 +619,20 @@ exports.exportPdf = async (req, res) => {
             const rightCols = buildCols(panelW);
 
             const drawHeader = (x, y, cols, title, accent) => {
-                doc.fillColor(accent).font('thai').fontSize(15).text(title, x, y - 8, { width: panelW });
                 const totalW = cols.reduce((s, c) => s + c.width, 0);
+                // Draw the header bar first
                 doc.roundedRect(x, y, totalW, headerH, 6).fill('#0ea5e9');
+                // Then draw the section title clearly above the bar (no overlap)
+                const titleGap = 20; // vertical gap above the bar
+                doc.fillColor(accent).font('thai').fontSize(15)
+                   .text(title, x, Math.max(doc.page.margins.top, y - titleGap), { width: panelW });
+                // Draw column labels
                 doc.fillColor('#fff').fontSize(12);
                 let cx = x;
-                cols.forEach(c => { doc.text(c.label, cx + 8, y + 6, { width: c.width - 16, align: c.align }); cx += c.width; });
+                cols.forEach(c => {
+                    doc.text(c.label, cx + 8, y + 6, { width: c.width - 16, align: c.align });
+                    cx += c.width;
+                });
                 doc.fillColor('#111827');
             };
 
